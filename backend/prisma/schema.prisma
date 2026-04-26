@@ -3,13 +3,72 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
+}
+
+enum VaultItemType {
+  password
+  note
+  key
+  file
+  image
 }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  googleSub       String   @unique
+  email           String   @unique
+  name            String
+  avatarUrl       String?
+
+  masterSalt      String?
+  masterVerifier  String?
+  masterParams    Json?
+
+  quotaBytes      BigInt   @default(524288000)
+  bytesUsed       BigInt   @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sessions        Session[]
+  vaultItems      VaultItem[]
+
+  @@index([email])
+}
+
+model Session {
+  id           String    @id @default(cuid())
+  userId       String
+  jtiHash      String    @unique
+  userAgent    String?
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model VaultItem {
+  id              String        @id @default(cuid())
+  userId          String
+  type            VaultItemType
+  title           String
+  cipherBlob      Bytes
+  cipherIv        Bytes
+  fileObjectKey   String?       @unique
+  fileSize        BigInt?
+  fileMime        String?
+  uploadStatus    String?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, updatedAt(sort: Desc)])
+  @@index([userId, updatedAt(sort: Desc)])
 }

@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: keepit-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: keepit
+      POSTGRES_PASSWORD: keepit
+      POSTGRES_DB: keepit
+    ports:
+      - "5432:5432"
+    volumes:
+      - keepit_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keepit -d keepit"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: keepit-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: keepitadmin
+      MINIO_ROOT_PASSWORD: keepitsecret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - keepit_minio_data:/data
+
+volumes:
+  keepit_postgres_data:
+  keepit_minio_data:

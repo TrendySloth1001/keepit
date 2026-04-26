@@ -1,4 +1,14 @@
 export const MESSAGES = {
   USER_NOT_FOUND: "User not found",
-  USER_EMAIL_EXISTS: "A user with this email already exists",
+  INVALID_GOOGLE_TOKEN: "Invalid Google ID token",
+  UNAUTHORIZED: "Authentication required",
+  INVALID_SESSION: "Session is invalid or expired",
+  MASTER_NOT_INITIALIZED: "Master password is not set",
+  MASTER_ALREADY_INITIALIZED: "Master password is already set",
+  MASTER_VERIFY_FAILED: "Master password is incorrect",
+  VAULT_ITEM_NOT_FOUND: "Vault item not found",
+  QUOTA_EXCEEDED: "Storage quota exceeded",
+  UPLOAD_TOO_LARGE: "File exceeds maximum upload size",
+  UPLOAD_NOT_FOUND: "Uploaded object was not found in storage",
+  UPLOAD_SIZE_MISMATCH: "Uploaded object size does not match the declared size",
 } as const;
