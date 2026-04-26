@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../shared/network/api_error.dart';
 import '../data/vault_models.dart';
 import '../data/vault_repository.dart';
 
@@ -32,7 +33,7 @@ class StorageNotifier extends StateNotifier<StorageState> {
       final stats = await VaultRepository.instance.storage();
       state = state.copyWith(stats: stats, isLoading: false);
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      state = state.copyWith(isLoading: false, errorMessage: friendlyApiError(e));
     }
   }
 }

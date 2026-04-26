@@ -41,3 +41,9 @@ export const finalizeUploadSchema = z.object({
   itemId: z.string().cuid(),
 });
 export type FinalizeUploadInput = z.infer<typeof finalizeUploadSchema>;
+
+export const uploadChunkParamsSchema = z.object({
+  itemId: z.string().cuid(),
+  partNumber: z.coerce.number().int().min(1).max(10000),
+});
+export type UploadChunkParamsInput = z.infer<typeof uploadChunkParamsSchema>;

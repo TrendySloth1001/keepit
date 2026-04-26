@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/theme/app_theme.dart';
+import '../../../../shared/widgets/shimmer_box.dart';
 import '../auth_notifier.dart';
 
 class MasterSetupPage extends ConsumerStatefulWidget {
@@ -83,11 +84,7 @@ class _MasterSetupPageState extends ConsumerState<MasterSetupPage> {
               ElevatedButton(
                 onPressed: auth.isBusy ? null : _submit,
                 child: auth.isBusy
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const ShimmerBox(width: 84, height: 18, borderRadius: 9)
                     : const Text('Create vault'),
               ),
             ],

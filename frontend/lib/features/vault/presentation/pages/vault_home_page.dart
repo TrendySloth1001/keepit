@@ -6,6 +6,7 @@ import '../../../../app/theme/app_theme.dart';
 import '../../../../app/theme/tokens.dart';
 import '../../../../shared/widgets/empty_state.dart';
 import '../../../../shared/widgets/inline_message.dart';
+import '../../../../shared/widgets/shimmer_box.dart';
 import '../../../auth/presentation/auth_notifier.dart';
 import '../../data/vault_models.dart';
 import '../storage_notifier.dart';
@@ -171,7 +172,7 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
 
   Widget _buildBody(VaultListState state, VaultNotifier notifier) {
     if (state.isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const ShimmerCentered();
     }
     final items = state.visibleItems;
     if (items.isEmpty) {
@@ -219,7 +220,9 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
           if (i >= items.length) {
             return const Padding(
               padding: EdgeInsets.all(AppSpacing.lg),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(
+                child: ShimmerBox(width: 120, height: 12, borderRadius: 6),
+              ),
             );
           }
           final item = items[i];

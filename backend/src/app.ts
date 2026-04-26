@@ -6,6 +6,7 @@ import { HTTP_STATUS } from "./constants/http-status";
 import { errorHandler, notFoundHandler } from "./shared/error-handler";
 import { authRouter } from "./features/auth/auth.route";
 import { vaultRouter } from "./features/vault/vault.route";
+import { rateLimitMiddleware } from "./shared/rate-limit";
 
 export const app = express();
 
@@ -13,6 +14,7 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 app.use(morgan("dev"));
+app.use(rateLimitMiddleware);
 
 app.get("/health", (_req, res) => {
   res.status(HTTP_STATUS.OK).json({

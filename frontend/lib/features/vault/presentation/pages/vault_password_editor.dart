@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/theme/app_theme.dart';
 import '../../../../app/theme/tokens.dart';
+import '../../../../shared/network/api_error.dart';
 import '../../../../shared/utils/clipboard.dart';
 import '../../../../shared/widgets/app_button.dart';
 import '../../../../shared/widgets/app_snack.dart';
 import '../../../../shared/widgets/confirm_dialog.dart';
 import '../../../../shared/widgets/inline_message.dart';
+import '../../../../shared/widgets/shimmer_box.dart';
 import '../../data/vault_models.dart';
 import '../vault_notifier.dart';
 import '../widgets/password_generator_sheet.dart';
@@ -56,7 +58,7 @@ class _VaultPasswordEditorState extends ConsumerState<VaultPasswordEditor> {
       _url.text = p.url ?? '';
       _notes.text = p.notes ?? '';
     } catch (e) {
-      _error = 'Failed to decrypt: $e';
+      _error = 'Failed to decrypt: ${friendlyApiError(e)}';
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -100,7 +102,7 @@ class _VaultPasswordEditorState extends ConsumerState<VaultPasswordEditor> {
       if (mounted) {
         setState(() {
           _isSaving = false;
-          _error = e.toString();
+          _error = friendlyApiError(e);
         });
       }
     }
@@ -122,7 +124,13 @@ class _VaultPasswordEditorState extends ConsumerState<VaultPasswordEditor> {
         Navigator.of(context).pop();
       }
     } catch (e) {
-      if (mounted) showAppSnack(context, 'Delete failed: $e', kind: AppSnackKind.error);
+      if (mounted) {
+        showAppSnack(
+          context,
+          'Delete failed: ${friendlyApiError(e)}',
+          kind: AppSnackKind.error,
+        );
+      }
     }
   }
 
@@ -153,7 +161,7 @@ class _VaultPasswordEditorState extends ConsumerState<VaultPasswordEditor> {
       ),
       body: SafeArea(
         child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? const ShimmerCentered()
             : SingleChildScrollView(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 child: Column(

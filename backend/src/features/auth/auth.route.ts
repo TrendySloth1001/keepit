@@ -5,6 +5,7 @@ import {
   googleSignIn,
   initMaster,
   logout,
+  me,
   verifyMaster,
 } from "./auth.controller";
 import {
@@ -16,6 +17,7 @@ import {
 export const authRouter = Router();
 
 authRouter.post("/google", validate(googleSignInSchema), googleSignIn);
+authRouter.get("/me", requireAuth, me);
 authRouter.post("/logout", requireAuth, logout);
 authRouter.post("/master/init", requireAuth, validate(masterInitSchema), initMaster);
 authRouter.post("/master/verify", requireAuth, validate(masterVerifySchema), verifyMaster);

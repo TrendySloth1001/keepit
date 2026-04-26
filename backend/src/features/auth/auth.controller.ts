@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { HTTP_STATUS } from "../../constants/http-status";
 import { asyncHandler } from "../../shared/async-handler";
 import {
+  getCurrentUser,
   initMasterPassword,
   signInWithGoogle,
   signOut,
@@ -29,4 +30,9 @@ export const initMaster = asyncHandler(async (req: Request, res: Response) => {
 export const verifyMaster = asyncHandler(async (req: Request, res: Response) => {
   await verifyMasterPassword(req.auth!.userId, req.body);
   res.status(HTTP_STATUS.NO_CONTENT).send();
+});
+
+export const me = asyncHandler(async (req: Request, res: Response) => {
+  const data = await getCurrentUser(req.auth!.userId);
+  res.status(HTTP_STATUS.OK).json({ success: true, data });
 });

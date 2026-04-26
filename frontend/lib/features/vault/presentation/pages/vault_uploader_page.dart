@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../../app/theme/app_theme.dart';
 import '../../../../app/theme/tokens.dart';
+import '../../../../shared/network/api_error.dart';
 import '../../../../shared/utils/format.dart';
 import '../../../../shared/widgets/app_button.dart';
 import '../../../../shared/widgets/app_snack.dart';
@@ -72,7 +73,7 @@ class _VaultUploaderPageState extends ConsumerState<VaultUploaderPage> {
         _title.text = _filename!;
       }
     } catch (e) {
-      _error = 'Pick failed: $e';
+      _error = 'Pick failed: ${friendlyApiError(e)}';
     } finally {
       if (mounted) setState(() => _isPicking = false);
     }
@@ -112,7 +113,7 @@ class _VaultUploaderPageState extends ConsumerState<VaultUploaderPage> {
       if (mounted) {
         setState(() {
           _isUploading = false;
-          _error = e.toString();
+          _error = friendlyApiError(e);
         });
       }
     }

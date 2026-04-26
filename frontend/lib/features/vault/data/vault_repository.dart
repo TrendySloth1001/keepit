@@ -13,14 +13,9 @@ class ListPage {
 }
 
 class InitiateUploadResult {
-  const InitiateUploadResult({
-    required this.itemId,
-    required this.uploadUrl,
-    required this.expiresInSeconds,
-  });
+  const InitiateUploadResult({required this.itemId, required this.chunkSize});
   final String itemId;
-  final String uploadUrl;
-  final int expiresInSeconds;
+  final int chunkSize;
 }
 
 class VaultRepository {
@@ -122,28 +117,41 @@ class VaultRepository {
     final data = Map<String, dynamic>.from(res.data['data'] as Map);
     return InitiateUploadResult(
       itemId: data['itemId'] as String,
-      uploadUrl: data['uploadUrl'] as String,
-      expiresInSeconds: data['expiresInSeconds'] as int,
+      chunkSize: (data['chunkSize'] as num?)?.toInt() ?? 5 * 1024 * 1024,
     );
   }
 
   Future<void> uploadCiphertext({
-    required String uploadUrl,
+    required String itemId,
+    required int chunkSize,
     required Uint8List ciphertext,
     required void Function(int sent, int total) onProgress,
   }) async {
-    final raw = Dio();
-    await raw.put(
-      uploadUrl,
-      data: Stream.fromIterable([ciphertext]),
-      options: Options(
-        headers: {
-          Headers.contentLengthHeader: ciphertext.length,
-          'content-type': 'application/octet-stream',
-        },
-      ),
-      onSendProgress: onProgress,
-    );
+    var sentTotal = 0;
+    final total = ciphertext.length;
+    final chunk = chunkSize <= 0 ? 5 * 1024 * 1024 : chunkSize;
+
+    for (var offset = 0, part = 1; offset < total; part++) {
+      final end = (offset + chunk > total) ? total : offset + chunk;
+      final partBytes = ciphertext.sublist(offset, end);
+      await _dio.post(
+        ApiConstants.vaultUploadChunk(itemId, part),
+        data: partBytes,
+        options: Options(
+          headers: {
+            Headers.contentLengthHeader: partBytes.length,
+            'content-type': 'application/octet-stream',
+          },
+        ),
+      );
+      sentTotal += partBytes.length;
+      onProgress(sentTotal, total);
+      offset = end;
+    }
+  }
+
+  Future<void> abortUpload(String itemId) async {
+    await _dio.delete(ApiConstants.vaultAbortUpload(itemId));
   }
 
   Future<VaultItem> finalizeUpload(String itemId) async {
@@ -162,10 +170,9 @@ class VaultRepository {
     return data['url'] as String;
   }
 
-  Future<Uint8List> downloadCiphertext(String url) async {
-    final raw = Dio();
-    final res = await raw.get<List<int>>(
-      url,
+  Future<Uint8List> downloadCiphertext(String id) async {
+    final res = await _dio.get<List<int>>(
+      ApiConstants.vaultDownloadContent(id),
       options: Options(responseType: ResponseType.bytes),
     );
     return Uint8List.fromList(res.data!);

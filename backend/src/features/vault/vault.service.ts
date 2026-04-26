@@ -5,11 +5,17 @@ import { env } from "../../constants/env";
 import { HttpError } from "../../shared/http-error";
 import { prisma } from "../../shared/prisma";
 import {
+  abortMultipartUpload,
   buildVaultObjectKey,
+  completeMultipartUpload,
+  createMultipartUpload,
   deleteObject,
+  getObjectBytes,
+  putObjectBytes,
   presignGetUrl,
   presignPutUrl,
   statObject,
+  uploadMultipartPart,
 } from "../../shared/storage/s3";
 import type {
   CreateVaultItemInput,
@@ -118,8 +124,12 @@ export async function deleteVaultItem(userId: string, id: string): Promise<void>
   const item = await prisma.vaultItem.findFirst({ where: { id, userId } });
   if (!item) throw new HttpError(HTTP_STATUS.NOT_FOUND, MESSAGES.VAULT_ITEM_NOT_FOUND);
 
+  if (item.multipartUploadId && item.fileObjectKey && item.uploadStatus !== "ready") {
+    await abortMultipartUpload(item.fileObjectKey, item.multipartUploadId).catch(() => {});
+  }
+
   await prisma.$transaction(async (tx) => {
-    if (item.fileObjectKey && item.fileSize && item.uploadStatus === "ready") {
+    if (item.fileSize) {
       await tx.user.update({
         where: { id: userId },
         data: { bytesUsed: { decrement: item.fileSize } },
@@ -167,19 +177,68 @@ export async function initiateUpload(userId: string, input: InitiateUploadInput)
   });
 
   const objectKey = buildVaultObjectKey(userId, item.id);
+  const multipartUploadId = await createMultipartUpload(objectKey, "application/octet-stream");
+
   await prisma.vaultItem.update({
     where: { id: item.id },
-    data: { fileObjectKey: objectKey },
+    data: { fileObjectKey: objectKey, multipartUploadId, uploadStatus: "uploading" },
   });
-
-  const uploadUrl = await presignPutUrl(objectKey, input.fileSize, "application/octet-stream");
 
   return {
     itemId: item.id,
     objectKey,
-    uploadUrl,
-    expiresInSeconds: 300,
+    chunkSize: 5 * 1024 * 1024,
   };
+}
+
+export async function uploadChunkForItem(
+  userId: string,
+  itemId: string,
+  partNumber: number,
+  chunk: Uint8Array,
+): Promise<void> {
+  const item = await prisma.vaultItem.findFirst({ where: { id: itemId, userId } });
+  if (!item || !item.fileObjectKey || !item.fileSize || !item.multipartUploadId) {
+    throw new HttpError(HTTP_STATUS.NOT_FOUND, MESSAGES.VAULT_ITEM_NOT_FOUND);
+  }
+  if (item.uploadStatus === "ready") {
+    throw new HttpError(HTTP_STATUS.CONFLICT, "Item is already uploaded");
+  }
+  if (chunk.byteLength === 0) {
+    throw new HttpError(HTTP_STATUS.BAD_REQUEST, "Chunk body is required");
+  }
+
+  const eTag = await uploadMultipartPart(item.fileObjectKey, item.multipartUploadId, partNumber, chunk);
+
+  await prisma.vaultUploadPart.upsert({
+    where: { itemId_partNumber: { itemId: item.id, partNumber } },
+    update: { eTag, sizeBytes: BigInt(chunk.byteLength) },
+    create: {
+      itemId: item.id,
+      partNumber,
+      eTag,
+      sizeBytes: BigInt(chunk.byteLength),
+    },
+  });
+}
+
+export async function uploadCiphertextForItem(
+  userId: string,
+  itemId: string,
+  ciphertext: Uint8Array,
+): Promise<void> {
+  const item = await prisma.vaultItem.findFirst({ where: { id: itemId, userId } });
+  if (!item || !item.fileObjectKey || !item.fileSize) {
+    throw new HttpError(HTTP_STATUS.NOT_FOUND, MESSAGES.VAULT_ITEM_NOT_FOUND);
+  }
+  if (item.uploadStatus === "ready") {
+    throw new HttpError(HTTP_STATUS.CONFLICT, "Item is already uploaded");
+  }
+  if (BigInt(ciphertext.byteLength) !== item.fileSize) {
+    throw new HttpError(HTTP_STATUS.UNPROCESSABLE_ENTITY, MESSAGES.UPLOAD_SIZE_MISMATCH);
+  }
+
+  await putObjectBytes(item.fileObjectKey, ciphertext, "application/octet-stream");
 }
 
 export async function finalizeUpload(userId: string, input: FinalizeUploadInput): Promise<VaultItemDto> {
@@ -190,6 +249,29 @@ export async function finalizeUpload(userId: string, input: FinalizeUploadInput)
   if (item.uploadStatus === "ready") {
     return toDto(item);
   }
+
+  if (item.multipartUploadId) {
+    const parts = await prisma.vaultUploadPart.findMany({
+      where: { itemId: item.id },
+      orderBy: { partNumber: "asc" },
+    });
+
+    if (parts.length === 0) {
+      throw new HttpError(HTTP_STATUS.NOT_FOUND, MESSAGES.UPLOAD_NOT_FOUND);
+    }
+
+    const total = parts.reduce((acc, p) => acc + p.sizeBytes, BigInt(0));
+    if (total !== item.fileSize) {
+      throw new HttpError(HTTP_STATUS.UNPROCESSABLE_ENTITY, MESSAGES.UPLOAD_SIZE_MISMATCH);
+    }
+
+    await completeMultipartUpload(
+      item.fileObjectKey,
+      item.multipartUploadId,
+      parts.map((p) => ({ partNumber: p.partNumber, eTag: p.eTag })),
+    );
+  }
+
   const stat = await statObject(item.fileObjectKey);
   if (!stat) {
     // Roll back the quota reservation: the client never uploaded the bytes.
@@ -209,8 +291,9 @@ export async function finalizeUpload(userId: string, input: FinalizeUploadInput)
   }
   const ready = await prisma.vaultItem.update({
     where: { id: item.id },
-    data: { uploadStatus: "ready" },
+    data: { uploadStatus: "ready", multipartUploadId: null },
   });
+  await prisma.vaultUploadPart.deleteMany({ where: { itemId: item.id } });
   return toDto(ready);
 }
 
@@ -221,6 +304,20 @@ export async function getDownloadUrl(userId: string, id: string): Promise<{ url:
   }
   const url = await presignGetUrl(item.fileObjectKey, 300);
   return { url, expiresInSeconds: 300 };
+}
+
+export async function downloadCiphertextForItem(userId: string, id: string): Promise<Uint8Array> {
+  const item = await prisma.vaultItem.findFirst({ where: { id, userId } });
+  if (!item || !item.fileObjectKey || item.uploadStatus !== "ready") {
+    throw new HttpError(HTTP_STATUS.NOT_FOUND, MESSAGES.VAULT_ITEM_NOT_FOUND);
+  }
+
+  const bytes = await getObjectBytes(item.fileObjectKey);
+  if (!bytes) {
+    throw new HttpError(HTTP_STATUS.NOT_FOUND, MESSAGES.UPLOAD_NOT_FOUND);
+  }
+
+  return bytes;
 }
 
 export async function getStorageStats(userId: string) {
@@ -246,4 +343,21 @@ export async function getStorageStats(userId: string) {
       count: row._count._all,
     })),
   };
+}
+
+export async function abortUpload(userId: string, itemId: string): Promise<void> {
+  const item = await prisma.vaultItem.findFirst({ where: { id: itemId, userId } });
+  if (!item || !item.fileObjectKey || !item.fileSize) {
+    throw new HttpError(HTTP_STATUS.NOT_FOUND, MESSAGES.VAULT_ITEM_NOT_FOUND);
+  }
+
+  if (item.multipartUploadId) {
+    await abortMultipartUpload(item.fileObjectKey, item.multipartUploadId).catch(() => {});
+  }
+
+  await prisma.$transaction([
+    prisma.vaultUploadPart.deleteMany({ where: { itemId: item.id } }),
+    prisma.user.update({ where: { id: userId }, data: { bytesUsed: { decrement: item.fileSize } } }),
+    prisma.vaultItem.delete({ where: { id: item.id } }),
+  ]);
 }

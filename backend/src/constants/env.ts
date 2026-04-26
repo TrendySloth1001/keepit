@@ -14,7 +14,7 @@ const envSchema = z.object({
   GOOGLE_CLIENT_IDS: z.string().min(1).default("REPLACE_ME.apps.googleusercontent.com"),
   JWT_SECRET: z.string().min(32).default("dev-only-change-me-please-32+chars-min!!"),
   JWT_TTL_SECONDS: z.coerce.number().int().positive().default(60 * 60 * 24 * 30),
-  USER_QUOTA_BYTES: z.coerce.number().int().positive().default(524_288_000),
+  USER_QUOTA_BYTES: z.coerce.number().int().positive().default(262_144_000),
   MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(50 * 1024 * 1024),
 });
 

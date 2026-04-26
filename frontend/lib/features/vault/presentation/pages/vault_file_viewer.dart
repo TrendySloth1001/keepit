@@ -7,11 +7,13 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../../../app/theme/app_theme.dart';
 import '../../../../app/theme/tokens.dart';
+import '../../../../shared/network/api_error.dart';
 import '../../../../shared/utils/format.dart';
 import '../../../../shared/widgets/app_button.dart';
 import '../../../../shared/widgets/app_snack.dart';
 import '../../../../shared/widgets/confirm_dialog.dart';
 import '../../../../shared/widgets/inline_message.dart';
+import '../../../../shared/widgets/shimmer_box.dart';
 import '../../data/vault_models.dart';
 import '../storage_notifier.dart';
 import '../vault_notifier.dart';
@@ -52,7 +54,7 @@ class _VaultFileViewerState extends ConsumerState<VaultFileViewer> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _error = 'Failed to decrypt: $e';
+          _error = 'Failed to decrypt: ${friendlyApiError(e)}';
         });
       }
     }
@@ -74,7 +76,11 @@ class _VaultFileViewerState extends ConsumerState<VaultFileViewer> {
       }
     } catch (e) {
       if (mounted) {
-        showAppSnack(context, 'Save failed: $e', kind: AppSnackKind.error);
+        showAppSnack(
+          context,
+          'Save failed: ${friendlyApiError(e)}',
+          kind: AppSnackKind.error,
+        );
       }
     }
   }
@@ -98,7 +104,11 @@ class _VaultFileViewerState extends ConsumerState<VaultFileViewer> {
       }
     } catch (e) {
       if (mounted) {
-        showAppSnack(context, 'Delete failed: $e', kind: AppSnackKind.error);
+        showAppSnack(
+          context,
+          'Delete failed: ${friendlyApiError(e)}',
+          kind: AppSnackKind.error,
+        );
       }
     }
   }
@@ -158,7 +168,7 @@ class _VaultFileViewerState extends ConsumerState<VaultFileViewer> {
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.lg),
           child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
+              ? const ShimmerCentered()
               : _error != null
               ? InlineMessage(
                   message: _error!,

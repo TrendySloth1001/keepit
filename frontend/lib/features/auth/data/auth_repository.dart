@@ -36,6 +36,13 @@ class AuthRepository {
     return result;
   }
 
+  Future<UserProfile> me() async {
+    final res = await _dio.get(ApiConstants.me);
+    return UserProfile.fromJson(
+      Map<String, dynamic>.from(res.data['data'] as Map),
+    );
+  }
+
   Future<void> initMaster({
     required String saltBase64,
     required String verifierBase64,

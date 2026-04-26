@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/presentation/auth_notifier.dart';
+import '../../features/auth/presentation/pages/auth_boot_page.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/master_setup_page.dart';
 import '../../features/auth/presentation/pages/master_unlock_page.dart';
@@ -26,11 +27,13 @@ GoRouter buildAppRouter(Ref ref) {
 
   return GoRouter(
     refreshListenable: listenable,
-    initialLocation: '/login',
+    initialLocation: '/boot',
     redirect: (context, state) {
       final auth = ref.read(authProvider);
       final loc = state.matchedLocation;
       switch (auth.stage) {
+        case AuthStage.initializing:
+          return loc == '/boot' ? null : '/boot';
         case AuthStage.signedOut:
           return loc == '/login' ? null : '/login';
         case AuthStage.needsMasterSetup:
@@ -38,7 +41,8 @@ GoRouter buildAppRouter(Ref ref) {
         case AuthStage.locked:
           return loc == '/master/unlock' ? null : '/master/unlock';
         case AuthStage.unlocked:
-          if (loc == '/login' ||
+          if (loc == '/boot' ||
+              loc == '/login' ||
               loc == '/master/setup' ||
               loc == '/master/unlock') {
             return '/vault';
@@ -47,6 +51,7 @@ GoRouter buildAppRouter(Ref ref) {
       }
     },
     routes: [
+      GoRoute(path: '/boot', builder: (_, _) => const AuthBootPage()),
       GoRoute(path: '/login', builder: (_, _) => const LoginPage()),
       GoRoute(
         path: '/master/setup',
@@ -57,10 +62,7 @@ GoRouter buildAppRouter(Ref ref) {
         builder: (_, _) => const MasterUnlockPage(),
       ),
       GoRoute(path: '/vault', builder: (_, _) => const VaultHomePage()),
-      GoRoute(
-        path: '/vault/settings',
-        builder: (_, _) => const SettingsPage(),
-      ),
+      GoRoute(path: '/vault/settings', builder: (_, _) => const SettingsPage()),
       GoRoute(
         path: '/vault/edit/password',
         builder: (_, state) =>
@@ -78,18 +80,15 @@ GoRouter buildAppRouter(Ref ref) {
       ),
       GoRoute(
         path: '/vault/upload/file',
-        builder: (_, _) =>
-            const VaultUploaderPage(type: VaultItemType.file),
+        builder: (_, _) => const VaultUploaderPage(type: VaultItemType.file),
       ),
       GoRoute(
         path: '/vault/upload/image',
-        builder: (_, _) =>
-            const VaultUploaderPage(type: VaultItemType.image),
+        builder: (_, _) => const VaultUploaderPage(type: VaultItemType.image),
       ),
       GoRoute(
         path: '/vault/file',
-        builder: (_, state) =>
-            VaultFileViewer(item: state.extra! as VaultItem),
+        builder: (_, state) => VaultFileViewer(item: state.extra! as VaultItem),
       ),
     ],
   );

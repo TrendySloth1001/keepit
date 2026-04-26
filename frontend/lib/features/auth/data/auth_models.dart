@@ -23,15 +23,24 @@ class UserProfile {
   final int quotaBytes;
   final int bytesUsed;
 
-  UserProfile copyWith({int? bytesUsed}) => UserProfile(
+  UserProfile copyWith({
+    String? email,
+    String? name,
+    String? avatarUrl,
+    bool? masterInitialized,
+    String? masterSalt,
+    KdfParams? masterParams,
+    int? quotaBytes,
+    int? bytesUsed,
+  }) => UserProfile(
     id: id,
-    email: email,
-    name: name,
-    avatarUrl: avatarUrl,
-    masterInitialized: masterInitialized,
-    masterSalt: masterSalt,
-    masterParams: masterParams,
-    quotaBytes: quotaBytes,
+    email: email ?? this.email,
+    name: name ?? this.name,
+    avatarUrl: avatarUrl ?? this.avatarUrl,
+    masterInitialized: masterInitialized ?? this.masterInitialized,
+    masterSalt: masterSalt ?? this.masterSalt,
+    masterParams: masterParams ?? this.masterParams,
+    quotaBytes: quotaBytes ?? this.quotaBytes,
     bytesUsed: bytesUsed ?? this.bytesUsed,
   );
 
@@ -51,6 +60,20 @@ class UserProfile {
       bytesUsed: int.parse(json['bytesUsed'] as String),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'email': email,
+      'name': name,
+      'avatarUrl': avatarUrl,
+      'masterInitialized': masterInitialized,
+      'masterSalt': masterSalt,
+      'masterParams': masterParams?.toJson(),
+      'quotaBytes': quotaBytes.toString(),
+      'bytesUsed': bytesUsed.toString(),
+    };
+  }
 }
 
 class SignInResult {
@@ -67,8 +90,6 @@ class SignInResult {
   factory SignInResult.fromJson(Map<String, dynamic> json) => SignInResult(
     token: json['token'] as String,
     expiresAt: DateTime.parse(json['expiresAt'] as String),
-    user: UserProfile.fromJson(
-      Map<String, dynamic>.from(json['user'] as Map),
-    ),
+    user: UserProfile.fromJson(Map<String, dynamic>.from(json['user'] as Map)),
   );
 }

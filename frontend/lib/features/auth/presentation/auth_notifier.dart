@@ -1,15 +1,18 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/crypto/vault_crypto.dart';
+import '../../../shared/network/api_error.dart';
+import '../../../shared/network/api_client.dart';
 import '../../../shared/storage/secure_storage.dart';
 import '../../../shared/storage/settings_service.dart';
 import '../data/auth_models.dart';
 import '../data/auth_repository.dart';
 
-enum AuthStage { signedOut, needsMasterSetup, locked, unlocked }
+enum AuthStage { initializing, signedOut, needsMasterSetup, locked, unlocked }
 
 class AuthState {
   const AuthState({
@@ -44,10 +47,80 @@ class AuthState {
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier() : super(const AuthState(stage: AuthStage.signedOut));
+  AuthNotifier() : super(const AuthState(stage: AuthStage.initializing)) {
+    _bootstrap();
+  }
 
   Uint8List? _masterKey;
   Uint8List? get masterKey => _masterKey;
+
+  Future<void> _bootstrap() async {
+    final settings = await SettingsService.instance.read();
+    final rememberedKey = settings.rememberMasterKey
+        ? await SettingsService.instance.readMasterKey()
+        : null;
+
+    try {
+      final token = await SecureStore.instance.readSessionToken();
+      if (token == null || token.isEmpty) {
+        state = const AuthState(stage: AuthStage.signedOut);
+        return;
+      }
+
+      ApiClient.instance.setSessionToken(token);
+      final user = await AuthRepository.instance.me();
+      await SecureStore.instance.writeCachedUser(jsonEncode(user.toJson()));
+
+      if (!user.masterInitialized) {
+        state = AuthState(stage: AuthStage.needsMasterSetup, user: user);
+        return;
+      }
+
+      if (rememberedKey != null) {
+        _masterKey = rememberedKey;
+        state = AuthState(stage: AuthStage.unlocked, user: user);
+        return;
+      }
+
+      state = AuthState(stage: AuthStage.locked, user: user);
+    } catch (e) {
+      final cachedUserJson = await SecureStore.instance.readCachedUser();
+      final cachedUser = cachedUserJson == null
+          ? null
+          : UserProfile.fromJson(
+              Map<String, dynamic>.from(jsonDecode(cachedUserJson) as Map),
+            );
+
+      if (e is DioException &&
+          (e.response?.statusCode == 401 || e.response?.statusCode == 403)) {
+        _masterKey = null;
+        ApiClient.instance.setSessionToken(null);
+        await SecureStore.instance.clearSessionToken();
+        await SecureStore.instance.clearCachedUser();
+        await SettingsService.instance.clearMasterKey();
+        state = const AuthState(stage: AuthStage.signedOut);
+        return;
+      }
+
+      if (cachedUser == null) {
+        state = const AuthState(stage: AuthStage.signedOut);
+        return;
+      }
+
+      if (!cachedUser.masterInitialized) {
+        state = AuthState(stage: AuthStage.needsMasterSetup, user: cachedUser);
+        return;
+      }
+
+      if (rememberedKey != null) {
+        _masterKey = rememberedKey;
+        state = AuthState(stage: AuthStage.unlocked, user: cachedUser);
+        return;
+      }
+
+      state = AuthState(stage: AuthStage.locked, user: cachedUser);
+    }
+  }
 
   Future<void> signInWithGoogle() async {
     state = state.copyWith(isBusy: true, errorMessage: null);
@@ -59,6 +132,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
             ? AuthStage.locked
             : AuthStage.needsMasterSetup,
         user: result.user,
+      );
+      await SecureStore.instance.writeCachedUser(
+        jsonEncode(result.user.toJson()),
       );
     } catch (e) {
       state = state.copyWith(isBusy: false, errorMessage: _readableError(e));
@@ -83,10 +159,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       _masterKey = derived.key;
       await _persistKeyIfRemembered();
-      state = AuthState(
-        stage: AuthStage.unlocked,
-        user: state.user?.copyWith(),
+      final user = state.user?.copyWith(
+        masterInitialized: true,
+        masterSalt: salt,
+        masterParams: params,
       );
+      if (user != null) {
+        await SecureStore.instance.writeCachedUser(jsonEncode(user.toJson()));
+      }
+      state = AuthState(stage: AuthStage.unlocked, user: user);
     } catch (e) {
       state = state.copyWith(isBusy: false, errorMessage: _readableError(e));
     }
@@ -134,6 +215,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     _masterKey = null;
     await SettingsService.instance.clearMasterKey();
     await SecureStore.instance.clearSessionToken();
+    await SecureStore.instance.clearCachedUser();
     await AuthRepository.instance.logout();
     state = const AuthState(stage: AuthStage.signedOut);
   }
@@ -152,13 +234,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
   void updateUserBytesUsed(int bytesUsed) {
     final u = state.user;
     if (u == null) return;
-    state = state.copyWith(user: u.copyWith(bytesUsed: bytesUsed));
+    final updated = u.copyWith(bytesUsed: bytesUsed);
+    state = state.copyWith(user: updated);
+    SecureStore.instance.writeCachedUser(jsonEncode(updated.toJson()));
   }
 }
 
 String _readableError(Object e) {
-  final raw = e.toString();
-  return raw.length > 240 ? raw.substring(0, 240) : raw;
+  return friendlyApiError(e);
 }
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>(

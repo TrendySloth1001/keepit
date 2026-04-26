@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/theme/app_theme.dart';
+import '../../../../shared/widgets/shimmer_box.dart';
 import '../auth_notifier.dart';
 
 class LoginPage extends ConsumerWidget {
@@ -50,11 +51,7 @@ class LoginPage extends ConsumerWidget {
               ElevatedButton.icon(
                 onPressed: auth.isBusy ? null : notifier.signInWithGoogle,
                 icon: auth.isBusy
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const ShimmerBox(width: 18, height: 18, borderRadius: 9)
                     : const Icon(Icons.login),
                 label: const Text('Continue with Google'),
               ),

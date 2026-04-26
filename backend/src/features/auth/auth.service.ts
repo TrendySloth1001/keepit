@@ -114,3 +114,22 @@ export async function verifyMasterPassword(userId: string, input: MasterVerifyIn
     throw new HttpError(HTTP_STATUS.UNAUTHORIZED, MESSAGES.MASTER_VERIFY_FAILED);
   }
 }
+
+export async function getCurrentUser(userId: string): Promise<SignInResult["user"]> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    throw new HttpError(HTTP_STATUS.NOT_FOUND, MESSAGES.USER_NOT_FOUND);
+  }
+
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    avatarUrl: user.avatarUrl,
+    masterInitialized: user.masterVerifier !== null,
+    masterSalt: user.masterSalt,
+    masterParams: user.masterParams,
+    quotaBytes: user.quotaBytes.toString(),
+    bytesUsed: user.bytesUsed.toString(),
+  };
+}

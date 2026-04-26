@@ -25,7 +25,7 @@ model User {
   masterVerifier  String?
   masterParams    Json?
 
-  quotaBytes      BigInt   @default(524288000)
+  quotaBytes      BigInt   @default(262144000)
   bytesUsed       BigInt   @default(0)
 
   createdAt       DateTime @default(now())
@@ -63,12 +63,28 @@ model VaultItem {
   fileSize        BigInt?
   fileMime        String?
   uploadStatus    String?
+  multipartUploadId String?
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  uploadParts     VaultUploadPart[]
 
   @@index([userId, type, updatedAt(sort: Desc)])
   @@index([userId, updatedAt(sort: Desc)])
+}
+
+model VaultUploadPart {
+  id          String    @id @default(cuid())
+  itemId       String
+  partNumber   Int
+  sizeBytes    BigInt
+  eTag         String
+  createdAt    DateTime @default(now())
+
+  item         VaultItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, partNumber])
+  @@index([itemId])
 }

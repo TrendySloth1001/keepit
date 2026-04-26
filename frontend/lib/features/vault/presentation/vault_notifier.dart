@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/crypto/vault_crypto.dart';
+import '../../../shared/network/api_error.dart';
 import '../../auth/presentation/auth_notifier.dart';
 import '../data/vault_models.dart';
 import '../data/vault_repository.dart';
@@ -223,17 +224,23 @@ class VaultNotifier extends StateNotifier<VaultListState> {
       fileMime: mime,
     );
 
-    await repo.uploadCiphertext(
-      uploadUrl: initiate.uploadUrl,
-      ciphertext: ciphertext,
-      onProgress: (sent, total) {
-        if (onProgress != null && total > 0) onProgress(sent / total);
-      },
-    );
+    try {
+      await repo.uploadCiphertext(
+        itemId: initiate.itemId,
+        chunkSize: initiate.chunkSize,
+        ciphertext: ciphertext,
+        onProgress: (sent, total) {
+          if (onProgress != null && total > 0) onProgress(sent / total);
+        },
+      );
 
-    final finalized = await repo.finalizeUpload(initiate.itemId);
-    _upsertLocal(finalized);
-    return finalized;
+      final finalized = await repo.finalizeUpload(initiate.itemId);
+      _upsertLocal(finalized);
+      return finalized;
+    } catch (e) {
+      await repo.abortUpload(initiate.itemId).catchError((_) {});
+      rethrow;
+    }
   }
 
   Future<({Uint8List bytes, String filename, String mime})> downloadFile(
@@ -246,8 +253,7 @@ class VaultNotifier extends StateNotifier<VaultListState> {
       cipherIv: item.cipherIv,
     );
     final fileIv = base64Decode(meta['fileIv'] as String);
-    final url = await repo.downloadUrl(item.id);
-    final ciphertext = await repo.downloadCiphertext(url);
+    final ciphertext = await repo.downloadCiphertext(item.id);
     final plain = await VaultCrypto.decrypt(
       masterKey: _key,
       ciphertext: ciphertext,
@@ -283,9 +289,9 @@ class VaultNotifier extends StateNotifier<VaultListState> {
 }
 
 String _err(Object e) {
-  final raw = e.toString();
-  return raw.length > 240 ? raw.substring(0, 240) : raw;
+  return friendlyApiError(e);
 }
 
-final vaultProvider =
-    StateNotifierProvider<VaultNotifier, VaultListState>((ref) => VaultNotifier(ref));
+final vaultProvider = StateNotifierProvider<VaultNotifier, VaultListState>(
+  (ref) => VaultNotifier(ref),
+);

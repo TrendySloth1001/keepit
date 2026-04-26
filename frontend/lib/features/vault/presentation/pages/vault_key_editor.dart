@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/theme/app_theme.dart';
 import '../../../../app/theme/tokens.dart';
+import '../../../../shared/network/api_error.dart';
 import '../../../../shared/utils/clipboard.dart';
 import '../../../../shared/widgets/app_button.dart';
 import '../../../../shared/widgets/app_snack.dart';
 import '../../../../shared/widgets/confirm_dialog.dart';
 import '../../../../shared/widgets/inline_message.dart';
+import '../../../../shared/widgets/shimmer_box.dart';
 import '../../data/vault_models.dart';
 import '../vault_notifier.dart';
 
@@ -50,7 +52,7 @@ class _VaultKeyEditorState extends ConsumerState<VaultKeyEditor> {
       _kind.text = p.kind ?? '';
       _notes.text = p.notes ?? '';
     } catch (e) {
-      _error = 'Failed to decrypt: $e';
+      _error = 'Failed to decrypt: ${friendlyApiError(e)}';
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -91,7 +93,7 @@ class _VaultKeyEditorState extends ConsumerState<VaultKeyEditor> {
     } catch (e) {
       if (mounted) setState(() {
         _isSaving = false;
-        _error = e.toString();
+        _error = friendlyApiError(e);
       });
     }
   }
@@ -128,7 +130,7 @@ class _VaultKeyEditorState extends ConsumerState<VaultKeyEditor> {
       ),
       body: SafeArea(
         child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? const ShimmerCentered()
             : SingleChildScrollView(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 child: Column(
