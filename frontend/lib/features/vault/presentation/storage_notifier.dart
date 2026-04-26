@@ -33,12 +33,14 @@ class StorageNotifier extends StateNotifier<StorageState> {
       final stats = await VaultRepository.instance.storage();
       state = state.copyWith(stats: stats, isLoading: false);
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: friendlyApiError(e));
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: friendlyApiError(e),
+      );
     }
   }
 }
 
-final storageProvider =
-    StateNotifierProvider<StorageNotifier, StorageState>(
-      (_) => StorageNotifier(),
-    );
+final storageProvider = StateNotifierProvider<StorageNotifier, StorageState>(
+  (_) => StorageNotifier(),
+);

@@ -94,16 +94,18 @@ class _VaultUploaderPageState extends ConsumerState<VaultUploaderPage> {
       _progress = 0;
     });
     try {
-      await ref.read(vaultProvider.notifier).uploadFile(
-        type: widget.type,
-        title: _title.text.trim(),
-        bytes: _bytes!,
-        mime: _mime!,
-        originalFilename: _filename!,
-        onProgress: (p) {
-          if (mounted) setState(() => _progress = p);
-        },
-      );
+      await ref
+          .read(vaultProvider.notifier)
+          .uploadFile(
+            type: widget.type,
+            title: _title.text.trim(),
+            bytes: _bytes!,
+            mime: _mime!,
+            originalFilename: _filename!,
+            onProgress: (p) {
+              if (mounted) setState(() => _progress = p);
+            },
+          );
       await ref.read(storageProvider.notifier).refresh();
       if (mounted) {
         showAppSnack(context, 'Uploaded', kind: AppSnackKind.success);
@@ -123,9 +125,7 @@ class _VaultUploaderPageState extends ConsumerState<VaultUploaderPage> {
   Widget build(BuildContext context) {
     final isImage = widget.type == VaultItemType.image;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(isImage ? 'Upload image' : 'Upload file'),
-      ),
+      appBar: AppBar(title: Text(isImage ? 'Upload image' : 'Upload file')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.lg),
@@ -133,10 +133,7 @@ class _VaultUploaderPageState extends ConsumerState<VaultUploaderPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (_error != null) ...[
-                InlineMessage(
-                  message: _error!,
-                  kind: InlineMessageKind.error,
-                ),
+                InlineMessage(message: _error!, kind: InlineMessageKind.error),
                 const SizedBox(height: AppSpacing.md),
               ],
               TextField(
@@ -220,7 +217,10 @@ class _VaultUploaderPageState extends ConsumerState<VaultUploaderPage> {
                 'The file is encrypted on this device before being uploaded. '
                 'The server never sees the contents.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: AppTheme.white, fontSize: AppType.micro),
+                style: TextStyle(
+                  color: AppTheme.white,
+                  fontSize: AppType.micro,
+                ),
               ),
             ],
           ),

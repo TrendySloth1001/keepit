@@ -50,7 +50,9 @@ class _VaultPasswordEditorState extends ConsumerState<VaultPasswordEditor> {
       return;
     }
     try {
-      final decrypted = await ref.read(vaultProvider.notifier).decrypt(existing);
+      final decrypted = await ref
+          .read(vaultProvider.notifier)
+          .decrypt(existing);
       final p = PasswordPayload.fromJson(decrypted);
       _title.text = existing.title;
       _username.text = p.username;
@@ -84,16 +86,18 @@ class _VaultPasswordEditorState extends ConsumerState<VaultPasswordEditor> {
       _error = null;
     });
     try {
-      await ref.read(vaultProvider.notifier).savePassword(
-        id: widget.existing?.id,
-        title: _title.text.trim(),
-        payload: PasswordPayload(
-          username: _username.text,
-          password: _password.text,
-          url: _url.text.isEmpty ? null : _url.text,
-          notes: _notes.text.isEmpty ? null : _notes.text,
-        ),
-      );
+      await ref
+          .read(vaultProvider.notifier)
+          .savePassword(
+            id: widget.existing?.id,
+            title: _title.text.trim(),
+            payload: PasswordPayload(
+              username: _username.text,
+              password: _password.text,
+              url: _url.text.isEmpty ? null : _url.text,
+              notes: _notes.text.isEmpty ? null : _notes.text,
+            ),
+          );
       if (mounted) {
         showAppSnack(context, 'Saved', kind: AppSnackKind.success);
         Navigator.of(context).pop();

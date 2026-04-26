@@ -44,8 +44,9 @@ class _VaultKeyEditorState extends ConsumerState<VaultKeyEditor> {
       return;
     }
     try {
-      final decrypted =
-          await ref.read(vaultProvider.notifier).decrypt(existing);
+      final decrypted = await ref
+          .read(vaultProvider.notifier)
+          .decrypt(existing);
       final p = KeyPayload.fromJson(decrypted);
       _title.text = existing.title;
       _value.text = p.value;
@@ -77,24 +78,27 @@ class _VaultKeyEditorState extends ConsumerState<VaultKeyEditor> {
       _error = null;
     });
     try {
-      await ref.read(vaultProvider.notifier).saveKey(
-        id: widget.existing?.id,
-        title: _title.text.trim(),
-        payload: KeyPayload(
-          value: _value.text,
-          kind: _kind.text.isEmpty ? null : _kind.text,
-          notes: _notes.text.isEmpty ? null : _notes.text,
-        ),
-      );
+      await ref
+          .read(vaultProvider.notifier)
+          .saveKey(
+            id: widget.existing?.id,
+            title: _title.text.trim(),
+            payload: KeyPayload(
+              value: _value.text,
+              kind: _kind.text.isEmpty ? null : _kind.text,
+              notes: _notes.text.isEmpty ? null : _notes.text,
+            ),
+          );
       if (mounted) {
         showAppSnack(context, 'Saved', kind: AppSnackKind.success);
         Navigator.of(context).pop();
       }
     } catch (e) {
-      if (mounted) setState(() {
-        _isSaving = false;
-        _error = friendlyApiError(e);
-      });
+      if (mounted)
+        setState(() {
+          _isSaving = false;
+          _error = friendlyApiError(e);
+        });
     }
   }
 

@@ -41,8 +41,9 @@ class _VaultFileViewerState extends ConsumerState<VaultFileViewer> {
 
   Future<void> _bootstrap() async {
     try {
-      final result =
-          await ref.read(vaultProvider.notifier).downloadFile(widget.item);
+      final result = await ref
+          .read(vaultProvider.notifier)
+          .downloadFile(widget.item);
       if (!mounted) return;
       setState(() {
         _bytes = result.bytes;
@@ -170,10 +171,7 @@ class _VaultFileViewerState extends ConsumerState<VaultFileViewer> {
           child: _isLoading
               ? const ShimmerCentered()
               : _error != null
-              ? InlineMessage(
-                  message: _error!,
-                  kind: InlineMessageKind.error,
-                )
+              ? InlineMessage(message: _error!, kind: InlineMessageKind.error)
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [

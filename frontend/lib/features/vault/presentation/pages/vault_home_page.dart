@@ -133,9 +133,7 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
                 child: const StorageMeter(),
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                 child: TextField(
                   controller: _searchController,
                   onChanged: notifier.setSearch,

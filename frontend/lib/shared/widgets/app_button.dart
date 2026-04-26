@@ -54,20 +54,16 @@ class AppButton extends StatelessWidget {
           ),
         ),
       ),
-      foregroundColor: WidgetStateProperty.all(
-        switch (variant) {
-          AppButtonVariant.primary => AppTheme.black,
-          AppButtonVariant.secondary => AppTheme.white,
-          AppButtonVariant.danger => AppTheme.error,
-        },
-      ),
-      backgroundColor: WidgetStateProperty.all(
-        switch (variant) {
-          AppButtonVariant.primary => AppTheme.white,
-          AppButtonVariant.secondary => AppTheme.black,
-          AppButtonVariant.danger => AppTheme.black,
-        },
-      ),
+      foregroundColor: WidgetStateProperty.all(switch (variant) {
+        AppButtonVariant.primary => AppTheme.black,
+        AppButtonVariant.secondary => AppTheme.white,
+        AppButtonVariant.danger => AppTheme.error,
+      }),
+      backgroundColor: WidgetStateProperty.all(switch (variant) {
+        AppButtonVariant.primary => AppTheme.white,
+        AppButtonVariant.secondary => AppTheme.black,
+        AppButtonVariant.danger => AppTheme.black,
+      }),
     );
 
     final button = switch (variant) {

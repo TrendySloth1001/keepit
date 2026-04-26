@@ -40,8 +40,9 @@ class _VaultNoteEditorState extends ConsumerState<VaultNoteEditor> {
       return;
     }
     try {
-      final decrypted =
-          await ref.read(vaultProvider.notifier).decrypt(existing);
+      final decrypted = await ref
+          .read(vaultProvider.notifier)
+          .decrypt(existing);
       final p = NotePayload.fromJson(decrypted);
       _title.text = existing.title;
       _body.text = p.body;
@@ -69,20 +70,23 @@ class _VaultNoteEditorState extends ConsumerState<VaultNoteEditor> {
       _error = null;
     });
     try {
-      await ref.read(vaultProvider.notifier).saveNote(
-        id: widget.existing?.id,
-        title: _title.text.trim(),
-        payload: NotePayload(body: _body.text),
-      );
+      await ref
+          .read(vaultProvider.notifier)
+          .saveNote(
+            id: widget.existing?.id,
+            title: _title.text.trim(),
+            payload: NotePayload(body: _body.text),
+          );
       if (mounted) {
         showAppSnack(context, 'Saved', kind: AppSnackKind.success);
         Navigator.of(context).pop();
       }
     } catch (e) {
-      if (mounted) setState(() {
-        _isSaving = false;
-        _error = friendlyApiError(e);
-      });
+      if (mounted)
+        setState(() {
+          _isSaving = false;
+          _error = friendlyApiError(e);
+        });
     }
   }
 

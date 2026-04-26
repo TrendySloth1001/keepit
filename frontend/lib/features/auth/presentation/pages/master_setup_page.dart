@@ -52,7 +52,11 @@ class _MasterSetupPageState extends ConsumerState<MasterSetupPage> {
               const Text(
                 'This password unlocks your vault. It never leaves your device. '
                 'If you forget it, your data cannot be recovered.',
-                style: TextStyle(color: AppTheme.white, fontSize: 14, height: 1.4),
+                style: TextStyle(
+                  color: AppTheme.white,
+                  fontSize: 14,
+                  height: 1.4,
+                ),
               ),
               const SizedBox(height: 24),
               TextField(
@@ -64,7 +68,9 @@ class _MasterSetupPageState extends ConsumerState<MasterSetupPage> {
               TextField(
                 controller: _confirm,
                 obscureText: true,
-                decoration: const InputDecoration(labelText: 'Confirm password'),
+                decoration: const InputDecoration(
+                  labelText: 'Confirm password',
+                ),
               ),
               const SizedBox(height: 16),
               if (_localError != null)
