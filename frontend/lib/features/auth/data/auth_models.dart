@@ -78,7 +78,8 @@ class UserProfile {
       policyAcceptedAt: json['policyAcceptedAt'] == null
           ? null
           : DateTime.parse(json['policyAcceptedAt'] as String),
-      currentPolicyVersion: json['currentPolicyVersion'] as String? ?? 'unknown',
+      currentPolicyVersion:
+          json['currentPolicyVersion'] as String? ?? 'unknown',
       policyAcceptedCurrent: json['policyAcceptedCurrent'] as bool? ?? false,
     );
   }

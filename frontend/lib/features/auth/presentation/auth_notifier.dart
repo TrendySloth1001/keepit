@@ -120,7 +120,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
 
       if (!cachedUser.policyAcceptedCurrent) {
-        state = AuthState(stage: AuthStage.needsPolicyConsent, user: cachedUser);
+        state = AuthState(
+          stage: AuthStage.needsPolicyConsent,
+          user: cachedUser,
+        );
         return;
       }
 
@@ -155,10 +158,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (rememberedKey != null) {
         _masterKey = rememberedKey;
       }
-      state = AuthState(
-        stage: nextStage,
-        user: result.user,
-      );
+      state = AuthState(stage: nextStage, user: result.user);
       await SecureStore.instance.writeCachedUser(
         jsonEncode(result.user.toJson()),
       );
@@ -231,7 +231,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         version: user.currentPolicyVersion,
       );
       final refreshed = await AuthRepository.instance.me();
-      await SecureStore.instance.writeCachedUser(jsonEncode(refreshed.toJson()));
+      await SecureStore.instance.writeCachedUser(
+        jsonEncode(refreshed.toJson()),
+      );
 
       if (!refreshed.policyAcceptedCurrent) {
         state = const AuthState(

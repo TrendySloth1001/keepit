@@ -53,10 +53,7 @@ class AuthRepository {
   Future<void> acceptPrivacyPolicy({required String version}) async {
     await _dio.post(
       ApiConstants.privacyPolicyConsent,
-      data: {
-        'version': version,
-        'accepted': true,
-      },
+      data: {'version': version, 'accepted': true},
     );
   }
 

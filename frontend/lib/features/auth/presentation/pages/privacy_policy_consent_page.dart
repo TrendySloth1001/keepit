@@ -17,7 +17,8 @@ class PrivacyPolicyConsentPage extends ConsumerStatefulWidget {
       _PrivacyPolicyConsentPageState();
 }
 
-class _PrivacyPolicyConsentPageState extends ConsumerState<PrivacyPolicyConsentPage> {
+class _PrivacyPolicyConsentPageState
+    extends ConsumerState<PrivacyPolicyConsentPage> {
   bool _acknowledged = false;
   late final Future<PrivacyPolicyDocument> _policyFuture;
 
@@ -42,7 +43,8 @@ class _PrivacyPolicyConsentPageState extends ConsumerState<PrivacyPolicyConsentP
           future: _policyFuture,
           builder: (context, snapshot) {
             final policy = snapshot.data;
-            final isLoading = snapshot.connectionState == ConnectionState.waiting;
+            final isLoading =
+                snapshot.connectionState == ConnectionState.waiting;
             return Padding(
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: Column(
@@ -65,10 +67,11 @@ class _PrivacyPolicyConsentPageState extends ConsumerState<PrivacyPolicyConsentP
                               ),
                             )
                           : snapshot.hasError
-                              ? _PolicyError(
-                                  message: 'Unable to load the latest policy. Please retry.',
-                                )
-                              : _PolicyBody(policy: policy!),
+                          ? _PolicyError(
+                              message:
+                                  'Unable to load the latest policy. Please retry.',
+                            )
+                          : _PolicyBody(policy: policy!),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
@@ -89,7 +92,9 @@ class _PrivacyPolicyConsentPageState extends ConsumerState<PrivacyPolicyConsentP
                       ),
                     ),
                   AppButton(
-                    label: auth.isBusy ? 'Saving consent...' : 'Accept policy and continue',
+                    label: auth.isBusy
+                        ? 'Saving consent...'
+                        : 'Accept policy and continue',
                     icon: Icons.verified,
                     onPressed: !_acknowledged || auth.isBusy || policy == null
                         ? null
@@ -294,10 +299,7 @@ class _ConsentPanel extends StatelessWidget {
             ),
             subtitle: const Text(
               'Acceptance is required before the vault can be opened.',
-              style: TextStyle(
-                color: AppTheme.white,
-                fontSize: AppType.micro,
-              ),
+              style: TextStyle(color: AppTheme.white, fontSize: AppType.micro),
             ),
           ),
         ],
@@ -317,10 +319,7 @@ class _PolicyError extends StatelessWidget {
       child: Text(
         message,
         textAlign: TextAlign.center,
-        style: const TextStyle(
-          color: AppTheme.error,
-          fontSize: AppType.body,
-        ),
+        style: const TextStyle(color: AppTheme.error, fontSize: AppType.body),
       ),
     );
   }

@@ -38,7 +38,9 @@ GoRouter buildAppRouter(Ref ref) {
         case AuthStage.signedOut:
           return loc == '/login' ? null : '/login';
         case AuthStage.needsPolicyConsent:
-          return loc == '/privacy-policy/consent' ? null : '/privacy-policy/consent';
+          return loc == '/privacy-policy/consent'
+              ? null
+              : '/privacy-policy/consent';
         case AuthStage.needsMasterSetup:
           return loc == '/master/setup' ? null : '/master/setup';
         case AuthStage.locked:

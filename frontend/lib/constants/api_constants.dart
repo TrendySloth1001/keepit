@@ -6,8 +6,8 @@ class ApiConstants {
   static const String logout = '/api/v1/auth/logout';
   static const String masterInit = '/api/v1/auth/master/init';
   static const String masterVerify = '/api/v1/auth/master/verify';
-    static const String privacyPolicyCurrent = '/api/v1/privacy-policy/current';
-    static const String privacyPolicyConsent = '/api/v1/privacy-policy/consent';
+  static const String privacyPolicyCurrent = '/api/v1/privacy-policy/current';
+  static const String privacyPolicyConsent = '/api/v1/privacy-policy/consent';
 
   static const String vaultItems = '/api/v1/vault/items';
   static const String vaultStorage = '/api/v1/vault/storage';
