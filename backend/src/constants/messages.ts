@@ -11,4 +11,6 @@ export const MESSAGES = {
   UPLOAD_TOO_LARGE: "File exceeds maximum upload size",
   UPLOAD_NOT_FOUND: "Uploaded object was not found in storage",
   UPLOAD_SIZE_MISMATCH: "Uploaded object size does not match the declared size",
+  PRIVACY_POLICY_VERSION_MISMATCH: "Privacy policy version mismatch. Please refresh and accept the latest version.",
+  PRIVACY_POLICY_CONSENT_REQUIRED: "You must accept the privacy policy to continue.",
 } as const;

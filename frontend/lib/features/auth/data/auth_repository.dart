@@ -43,6 +43,23 @@ class AuthRepository {
     );
   }
 
+  Future<PrivacyPolicyDocument> getCurrentPrivacyPolicy() async {
+    final res = await _dio.get(ApiConstants.privacyPolicyCurrent);
+    return PrivacyPolicyDocument.fromJson(
+      Map<String, dynamic>.from(res.data['data'] as Map),
+    );
+  }
+
+  Future<void> acceptPrivacyPolicy({required String version}) async {
+    await _dio.post(
+      ApiConstants.privacyPolicyConsent,
+      data: {
+        'version': version,
+        'accepted': true,
+      },
+    );
+  }
+
   Future<void> initMaster({
     required String saltBase64,
     required String verifierBase64,

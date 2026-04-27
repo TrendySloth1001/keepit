@@ -6,6 +6,9 @@ import { HttpError } from "../../shared/http-error";
 import { prisma } from "../../shared/prisma";
 import { hashJti, issueSessionToken } from "../../shared/auth/jwt";
 import { verifyGoogleIdToken } from "../../shared/auth/google";
+import {
+  getActivePrivacyPolicy,
+} from "../privacy-policy/privacy-policy.service";
 import type {
   GoogleSignInInput,
   MasterInitInput,
@@ -25,6 +28,43 @@ export interface SignInResult {
     masterParams: unknown;
     quotaBytes: string;
     bytesUsed: string;
+    policyAcceptedVersion: string | null;
+    policyAcceptedAt: string | null;
+    currentPolicyVersion: string;
+    policyAcceptedCurrent: boolean;
+  };
+}
+
+function mapUserResponse(
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    avatarUrl: string | null;
+    masterVerifier: string | null;
+    masterSalt: string | null;
+    masterParams: unknown;
+    quotaBytes: bigint;
+    bytesUsed: bigint;
+  },
+  currentPolicyVersion: string,
+  policyAcceptedVersion: string | null,
+  policyAcceptedAt: Date | null,
+): SignInResult["user"] {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    avatarUrl: user.avatarUrl,
+    masterInitialized: user.masterVerifier !== null,
+    masterSalt: user.masterSalt,
+    masterParams: user.masterParams,
+    quotaBytes: user.quotaBytes.toString(),
+    bytesUsed: user.bytesUsed.toString(),
+    policyAcceptedVersion,
+    policyAcceptedAt: policyAcceptedAt?.toISOString() ?? null,
+    currentPolicyVersion,
+    policyAcceptedCurrent: policyAcceptedVersion === currentPolicyVersion,
   };
 }
 
@@ -53,6 +93,7 @@ export async function signInWithGoogle(input: GoogleSignInInput, userAgent?: str
   });
 
   const issued = issueSessionToken(user.id);
+  const policy = await getActivePrivacyPolicy();
   await prisma.session.create({
     data: {
       userId: user.id,
@@ -66,15 +107,7 @@ export async function signInWithGoogle(input: GoogleSignInInput, userAgent?: str
     token: issued.token,
     expiresAt: issued.expiresAt,
     user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      avatarUrl: user.avatarUrl,
-      masterInitialized: user.masterVerifier !== null,
-      masterSalt: user.masterSalt,
-      masterParams: user.masterParams,
-      quotaBytes: user.quotaBytes.toString(),
-      bytesUsed: user.bytesUsed.toString(),
+      ...mapUserResponse(user, policy.version, null, null),
     },
   };
 }
@@ -116,20 +149,16 @@ export async function verifyMasterPassword(userId: string, input: MasterVerifyIn
 }
 
 export async function getCurrentUser(userId: string): Promise<SignInResult["user"]> {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const [user, policy] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId } }),
+    getActivePrivacyPolicy(),
+  ]);
   if (!user) {
     throw new HttpError(HTTP_STATUS.NOT_FOUND, MESSAGES.USER_NOT_FOUND);
   }
 
-  return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    avatarUrl: user.avatarUrl,
-    masterInitialized: user.masterVerifier !== null,
-    masterSalt: user.masterSalt,
-    masterParams: user.masterParams,
-    quotaBytes: user.quotaBytes.toString(),
-    bytesUsed: user.bytesUsed.toString(),
-  };
+  const policyAcceptedVersion = (user as { policyAcceptedVersion?: string | null }).policyAcceptedVersion ?? null;
+  const policyAcceptedAt = (user as { policyAcceptedAt?: Date | null }).policyAcceptedAt ?? null;
+
+  return mapUserResponse(user, policy.version, policyAcceptedVersion, policyAcceptedAt);
 }

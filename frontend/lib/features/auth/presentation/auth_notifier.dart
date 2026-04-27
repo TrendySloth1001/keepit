@@ -12,7 +12,14 @@ import '../../../shared/storage/settings_service.dart';
 import '../data/auth_models.dart';
 import '../data/auth_repository.dart';
 
-enum AuthStage { initializing, signedOut, needsMasterSetup, locked, unlocked }
+enum AuthStage {
+  initializing,
+  signedOut,
+  needsPolicyConsent,
+  needsMasterSetup,
+  locked,
+  unlocked,
+}
 
 class AuthState {
   const AuthState({
@@ -71,6 +78,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final user = await AuthRepository.instance.me();
       await SecureStore.instance.writeCachedUser(jsonEncode(user.toJson()));
 
+      if (!user.policyAcceptedCurrent) {
+        state = AuthState(stage: AuthStage.needsPolicyConsent, user: user);
+        return;
+      }
+
       if (!user.masterInitialized) {
         state = AuthState(stage: AuthStage.needsMasterSetup, user: user);
         return;
@@ -107,6 +119,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return;
       }
 
+      if (!cachedUser.policyAcceptedCurrent) {
+        state = AuthState(stage: AuthStage.needsPolicyConsent, user: cachedUser);
+        return;
+      }
+
       if (!cachedUser.masterInitialized) {
         state = AuthState(stage: AuthStage.needsMasterSetup, user: cachedUser);
         return;
@@ -125,12 +142,21 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> signInWithGoogle() async {
     state = state.copyWith(isBusy: true, errorMessage: null);
     try {
+      final settings = await SettingsService.instance.read();
+      final rememberedKey = settings.rememberMasterKey
+          ? await SettingsService.instance.readMasterKey()
+          : null;
       final result = await AuthRepository.instance.signInWithGoogle();
       await SecureStore.instance.writeSessionToken(result.token);
+      final nextStage = _resolvePostAuthStage(
+        result.user,
+        rememberedKey: rememberedKey,
+      );
+      if (rememberedKey != null) {
+        _masterKey = rememberedKey;
+      }
       state = AuthState(
-        stage: result.user.masterInitialized
-            ? AuthStage.locked
-            : AuthStage.needsMasterSetup,
+        stage: nextStage,
         user: result.user,
       );
       await SecureStore.instance.writeCachedUser(
@@ -195,6 +221,44 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  Future<void> acceptLatestPrivacyPolicy() async {
+    final user = state.user;
+    if (user == null) return;
+
+    state = state.copyWith(isBusy: true, errorMessage: null);
+    try {
+      await AuthRepository.instance.acceptPrivacyPolicy(
+        version: user.currentPolicyVersion,
+      );
+      final refreshed = await AuthRepository.instance.me();
+      await SecureStore.instance.writeCachedUser(jsonEncode(refreshed.toJson()));
+
+      if (!refreshed.policyAcceptedCurrent) {
+        state = const AuthState(
+          stage: AuthStage.needsPolicyConsent,
+          errorMessage:
+              'Policy acceptance is still pending. Please refresh and try again.',
+        );
+        return;
+      }
+
+      final settings = await SettingsService.instance.read();
+      final rememberedKey = settings.rememberMasterKey
+          ? await SettingsService.instance.readMasterKey()
+          : null;
+      if (rememberedKey != null) {
+        _masterKey = rememberedKey;
+      }
+
+      state = AuthState(
+        stage: _resolvePostAuthStage(refreshed, rememberedKey: rememberedKey),
+        user: refreshed,
+      );
+    } catch (e) {
+      state = state.copyWith(isBusy: false, errorMessage: _readableError(e));
+    }
+  }
+
   /// Auto-lock entry point. Wipes in-memory key. If the user opted to
   /// remember the master key on this device, silently re-loads it from
   /// OS-encrypted storage so the unlock screen never appears.
@@ -237,6 +301,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final updated = u.copyWith(bytesUsed: bytesUsed);
     state = state.copyWith(user: updated);
     SecureStore.instance.writeCachedUser(jsonEncode(updated.toJson()));
+  }
+
+  AuthStage _resolvePostAuthStage(
+    UserProfile user, {
+    required Uint8List? rememberedKey,
+  }) {
+    if (!user.policyAcceptedCurrent) return AuthStage.needsPolicyConsent;
+    if (!user.masterInitialized) return AuthStage.needsMasterSetup;
+    if (rememberedKey != null) return AuthStage.unlocked;
+    return AuthStage.locked;
   }
 }
 

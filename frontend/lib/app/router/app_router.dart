@@ -7,6 +7,7 @@ import '../../features/auth/presentation/pages/auth_boot_page.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/master_setup_page.dart';
 import '../../features/auth/presentation/pages/master_unlock_page.dart';
+import '../../features/auth/presentation/pages/privacy_policy_consent_page.dart';
 import '../../features/settings/settings_page.dart';
 import '../../features/vault/data/vault_models.dart';
 import '../../features/vault/presentation/pages/vault_file_viewer.dart';
@@ -36,6 +37,8 @@ GoRouter buildAppRouter(Ref ref) {
           return loc == '/boot' ? null : '/boot';
         case AuthStage.signedOut:
           return loc == '/login' ? null : '/login';
+        case AuthStage.needsPolicyConsent:
+          return loc == '/privacy-policy/consent' ? null : '/privacy-policy/consent';
         case AuthStage.needsMasterSetup:
           return loc == '/master/setup' ? null : '/master/setup';
         case AuthStage.locked:
@@ -53,6 +56,10 @@ GoRouter buildAppRouter(Ref ref) {
     routes: [
       GoRoute(path: '/boot', builder: (_, _) => const AuthBootPage()),
       GoRoute(path: '/login', builder: (_, _) => const LoginPage()),
+      GoRoute(
+        path: '/privacy-policy/consent',
+        builder: (_, _) => const PrivacyPolicyConsentPage(),
+      ),
       GoRoute(
         path: '/master/setup',
         builder: (_, _) => const MasterSetupPage(),

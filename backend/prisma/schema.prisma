@@ -27,6 +27,8 @@ model User {
 
   quotaBytes      BigInt   @default(262144000)
   bytesUsed       BigInt   @default(0)
+  policyAcceptedVersion String?
+  policyAcceptedAt DateTime?
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -35,6 +37,15 @@ model User {
   vaultItems      VaultItem[]
 
   @@index([email])
+}
+
+model PrivacyPolicy {
+  id          String   @id @default("active")
+  version     String
+  title       String
+  content     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Session {
