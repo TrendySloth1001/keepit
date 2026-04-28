@@ -1,2 +1,3 @@
 client_secret_1079351951981-qqa1hht24h7j347trjqp7a2eukvv9b0s.apps.googleusercontent.com.json
-/node_modules
+**/node_modules/
+**/.next/
