@@ -3,12 +3,15 @@ import { HTTP_STATUS } from "../../constants/http-status";
 import { asyncHandler } from "../../shared/async-handler";
 import {
   abortUpload,
+  batchDeleteVaultItems,
+  batchGetVaultItems,
   createVaultItem,
   downloadCiphertextForItem,
   deleteVaultItem,
   finalizeUpload,
   getDownloadUrl,
   getStorageStats,
+  getStorageTimeline,
   getVaultItem,
   initiateUpload,
   listVaultItems,
@@ -17,10 +20,12 @@ import {
   updateVaultItem,
 } from "./vault.service";
 import {
+  batchIdsSchema,
   createVaultItemSchema,
   finalizeUploadSchema,
   initiateUploadSchema,
   listVaultItemsSchema,
+  statsRangeSchema,
   uploadChunkParamsSchema,
   updateVaultItemSchema,
 } from "./vault.schema";
@@ -115,5 +120,23 @@ export const downloadContentCtl = asyncHandler(async (req: Request, res: Respons
 
 export const storage = asyncHandler(async (req: Request, res: Response) => {
   const data = await getStorageStats(req.auth!.userId);
+  res.status(HTTP_STATUS.OK).json({ success: true, data });
+});
+
+export const storageTimeline = asyncHandler(async (req: Request, res: Response) => {
+  const input = statsRangeSchema.parse(req.query);
+  const data = await getStorageTimeline(req.auth!.userId, input);
+  res.status(HTTP_STATUS.OK).json({ success: true, data });
+});
+
+export const batchGet = asyncHandler(async (req: Request, res: Response) => {
+  const input = batchIdsSchema.parse(req.body);
+  const data = await batchGetVaultItems(req.auth!.userId, input);
+  res.status(HTTP_STATUS.OK).json({ success: true, data });
+});
+
+export const batchDelete = asyncHandler(async (req: Request, res: Response) => {
+  const input = batchIdsSchema.parse(req.body);
+  const data = await batchDeleteVaultItems(req.auth!.userId, input);
   res.status(HTTP_STATUS.OK).json({ success: true, data });
 });

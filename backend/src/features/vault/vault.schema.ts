@@ -3,12 +3,45 @@ import { z } from "zod";
 export const vaultItemTypeSchema = z.enum(["password", "note", "key", "file", "image"]);
 export type VaultItemTypeInput = z.infer<typeof vaultItemTypeSchema>;
 
+const csvEnum = <T extends z.ZodTypeAny>(schema: T) =>
+  z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .transform((v) => {
+      if (!v) return undefined;
+      const arr = Array.isArray(v) ? v : v.split(",");
+      return arr.map((s) => s.trim()).filter(Boolean);
+    })
+    .pipe(z.array(schema).optional());
+
 export const listVaultItemsSchema = z.object({
+  // legacy single-type filter (kept for back-compat)
   type: vaultItemTypeSchema.optional(),
+  // multi-type filter, e.g. ?types=password,note
+  types: csvEnum(vaultItemTypeSchema),
+  // case-insensitive title search
+  q: z.string().trim().min(1).max(200).optional(),
+  // ISO timestamps
+  since: z.coerce.date().optional(),
+  until: z.coerce.date().optional(),
+  // sort order
+  sort: z.enum(["updated_desc", "updated_asc", "created_desc", "created_asc", "title_asc", "title_desc"]).default("updated_desc"),
   cursor: z.string().cuid().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 export type ListVaultItemsInput = z.infer<typeof listVaultItemsSchema>;
+
+export const batchIdsSchema = z.object({
+  ids: z.array(z.string().cuid()).min(1).max(200),
+});
+export type BatchIdsInput = z.infer<typeof batchIdsSchema>;
+
+export const statsRangeSchema = z.object({
+  bucket: z.enum(["day", "week", "month"]).default("day"),
+  since: z.coerce.date().optional(),
+  until: z.coerce.date().optional(),
+});
+export type StatsRangeInput = z.infer<typeof statsRangeSchema>;
 
 const base64Bytes = z.string().regex(/^[A-Za-z0-9+/=]+$/);
 

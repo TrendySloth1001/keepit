@@ -2,6 +2,8 @@ import express, { Router } from "express";
 import { requireAuth } from "../../shared/auth/middleware";
 import {
   abortUploadCtl,
+  batchDelete,
+  batchGet,
   create,
   downloadContentCtl,
   downloadUrl,
@@ -11,6 +13,7 @@ import {
   list,
   remove,
   storage,
+  storageTimeline,
   uploadChunkCtl,
   uploadContentCtl,
   update,
@@ -21,6 +24,9 @@ export const vaultRouter = Router();
 vaultRouter.use(requireAuth);
 
 vaultRouter.get("/storage", storage);
+vaultRouter.get("/storage/timeline", storageTimeline);
+vaultRouter.post("/items/batch", batchGet);
+vaultRouter.post("/items/batch-delete", batchDelete);
 vaultRouter.post("/uploads/initiate", initiateUploadCtl);
 vaultRouter.post("/uploads/finalize", finalizeUploadCtl);
 vaultRouter.post(

@@ -57,6 +57,86 @@ class SettingsPage extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),
+
+              _SectionHeader('Privacy policy'),
+              _Card(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(AppSpacing.sm),
+                          decoration: BoxDecoration(
+                            color: user.policyAcceptedCurrent
+                                ? AppTheme.white
+                                : AppTheme.black,
+                            border: Border.all(color: AppTheme.white),
+                            borderRadius: AppRadius.brPill,
+                          ),
+                          child: Icon(
+                            user.policyAcceptedCurrent
+                                ? Icons.verified
+                                : Icons.error_outline,
+                            color: user.policyAcceptedCurrent
+                                ? AppTheme.black
+                                : AppTheme.white,
+                            size: AppIconSize.md,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                user.policyAcceptedCurrent
+                                    ? 'Privacy policy accepted'
+                                    : 'Privacy policy not yet accepted',
+                                style: const TextStyle(
+                                  color: AppTheme.white,
+                                  fontSize: AppType.subtitle,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                user.policyAcceptedCurrent
+                                    ? 'The current policy version has been accepted for this account.'
+                                    : 'The vault stays blocked until you accept the latest policy version.',
+                                style: const TextStyle(
+                                  color: AppTheme.white,
+                                  fontSize: AppType.caption,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    _DetailRow(
+                      label: 'Current version',
+                      value: user.currentPolicyVersion,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    _DetailRow(
+                      label: 'Accepted version',
+                      value: user.policyAcceptedVersion ?? 'Not accepted yet',
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    _DetailRow(
+                      label: 'Accepted at',
+                      value: user.policyAcceptedAt == null
+                          ? 'Pending'
+                          : _formatDateTime(user.policyAcceptedAt!),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xl),
             ],
 
             _SectionHeader('Auto-lock'),
@@ -191,6 +271,14 @@ class SettingsPage extends ConsumerWidget {
     if (!ok) return;
     await ref.read(authProvider.notifier).logout();
   }
+
+  String _formatDateTime(DateTime dateTime) {
+    final date =
+        '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')}';
+    final time =
+        '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+    return '$date $time';
+  }
 }
 
 class _SectionHeader extends StatelessWidget {
@@ -231,6 +319,49 @@ class _Card extends StatelessWidget {
         borderRadius: AppRadius.brLg,
       ),
       child: child,
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 110,
+          child: Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              color: AppTheme.white,
+              fontSize: AppType.micro,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.1,
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              color: AppTheme.white,
+              fontSize: AppType.body,
+              fontWeight: label == 'Accepted at' ? FontWeight.w600 : FontWeight.w800,
+              fontStyle: label == 'Accepted at' && value != 'Pending'
+                  ? FontStyle.italic
+                  : FontStyle.normal,
+              height: 1.4,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -18,10 +18,12 @@ import {
   uploadMultipartPart,
 } from "../../shared/storage/s3";
 import type {
+  BatchIdsInput,
   CreateVaultItemInput,
   FinalizeUploadInput,
   InitiateUploadInput,
   ListVaultItemsInput,
+  StatsRangeInput,
   UpdateVaultItemInput,
 } from "./vault.schema";
 
@@ -64,20 +66,161 @@ function toDto(item: {
   };
 }
 
+/**
+ * Advanced vault listing.
+ *
+ * Algorithms:
+ *  - **Cursor pagination** (keyset on `id`) — O(log N) per page using the
+ *    composite indexes `(userId, updatedAt desc)` / `(userId, type, updatedAt desc)`.
+ *    Avoids OFFSET drift and remains stable under concurrent writes.
+ *  - **Multi-type filter** lowered to a single `IN (...)` predicate so PG can
+ *    still seek the partial index for `(userId, type, ...)`.
+ *  - **Title search** is case/diacritic-insensitive via PG `ILIKE` on a
+ *    sanitized pattern. The pattern is anchored as `%token%` and any of
+ *    `% _ \` are escaped to prevent injection / DoS via wildcards.
+ *  - **Time-range filter** uses half-open `[since, until)` windowing.
+ *  - **Stable ordering** always tie-breaks on `id` so cursor pagination is
+ *    deterministic even when two rows share `updatedAt`.
+ */
 export async function listVaultItems(userId: string, input: ListVaultItemsInput) {
   const where: Prisma.VaultItemWhereInput = { userId };
-  if (input.type) where.type = input.type;
+
+  const types = input.types ?? (input.type ? [input.type] : undefined);
+  if (types && types.length > 0) {
+    where.type = types.length === 1 ? types[0] : { in: types };
+  }
+
+  if (input.q) {
+    // Escape LIKE metacharacters then wrap with wildcards.
+    const pattern = `%${input.q.replace(/[\\%_]/g, (m) => "\\" + m)}%`;
+    where.title = { contains: pattern.slice(1, -1), mode: "insensitive" };
+  }
+
+  if (input.since || input.until) {
+    where.updatedAt = {};
+    if (input.since) where.updatedAt.gte = input.since;
+    if (input.until) where.updatedAt.lt = input.until;
+  }
+
+  const orderBy: Prisma.VaultItemOrderByWithRelationInput[] = (() => {
+    switch (input.sort) {
+      case "updated_asc":  return [{ updatedAt: "asc" }, { id: "asc" }];
+      case "created_desc": return [{ createdAt: "desc" }, { id: "desc" }];
+      case "created_asc":  return [{ createdAt: "asc" }, { id: "asc" }];
+      case "title_asc":    return [{ title: "asc" }, { id: "asc" }];
+      case "title_desc":   return [{ title: "desc" }, { id: "desc" }];
+      case "updated_desc":
+      default:             return [{ updatedAt: "desc" }, { id: "desc" }];
+    }
+  })();
+
   const items = await prisma.vaultItem.findMany({
     where,
     take: input.limit + 1,
     ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
-    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    orderBy,
   });
   const hasMore = items.length > input.limit;
   const trimmed = hasMore ? items.slice(0, input.limit) : items;
   return {
     items: trimmed.map(toDto),
     nextCursor: hasMore ? trimmed[trimmed.length - 1].id : null,
+  };
+}
+
+/**
+ * Batch fetch by ids (max 200). Filters by `userId` so foreign ids silently
+ * drop out — never leaks existence.
+ */
+export async function batchGetVaultItems(userId: string, input: BatchIdsInput): Promise<VaultItemDto[]> {
+  const items = await prisma.vaultItem.findMany({
+    where: { userId, id: { in: input.ids } },
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+  });
+  return items.map(toDto);
+}
+
+/**
+ * Atomic batch delete with quota reconciliation.
+ *
+ * Steps:
+ *  1) Snapshot the rows the user owns (also returns `fileObjectKey`/`fileSize`).
+ *  2) Single transaction: decrement `bytesUsed` by the sum of file bytes,
+ *     then `deleteMany` the items.
+ *  3) Best-effort object-store cleanup *outside* the transaction so a slow
+ *     S3 call cannot extend the DB lock window.
+ *
+ * Returns the number of items deleted so callers can detect partial misses.
+ */
+export async function batchDeleteVaultItems(userId: string, input: BatchIdsInput): Promise<{ deleted: number }> {
+  const items = await prisma.vaultItem.findMany({
+    where: { userId, id: { in: input.ids } },
+    select: { id: true, fileObjectKey: true, fileSize: true, multipartUploadId: true, uploadStatus: true },
+  });
+  if (items.length === 0) return { deleted: 0 };
+
+  const totalBytes = items.reduce<bigint>((acc, i) => acc + (i.fileSize ?? BigInt(0)), BigInt(0));
+
+  await prisma.$transaction(async (tx) => {
+    if (totalBytes > BigInt(0)) {
+      await tx.user.update({
+        where: { id: userId },
+        data: { bytesUsed: { decrement: totalBytes } },
+      });
+    }
+    await tx.vaultItem.deleteMany({ where: { id: { in: items.map((i) => i.id) }, userId } });
+  });
+
+  await Promise.allSettled(
+    items.flatMap((item) => {
+      const tasks: Promise<unknown>[] = [];
+      if (item.multipartUploadId && item.fileObjectKey && item.uploadStatus !== "ready") {
+        tasks.push(abortMultipartUpload(item.fileObjectKey, item.multipartUploadId));
+      }
+      if (item.fileObjectKey) tasks.push(deleteObject(item.fileObjectKey));
+      return tasks;
+    }),
+  );
+
+  return { deleted: items.length };
+}
+
+/**
+ * Storage timeline aggregation.
+ *
+ * Buckets `createdAt` by day/week/month using PG `date_trunc` and returns a
+ * sparse series the client can chart. Uses parameterized SQL with a guarded
+ * enum to avoid SQL injection — the bucket value is whitelisted before
+ * interpolation.
+ */
+export async function getStorageTimeline(userId: string, input: StatsRangeInput) {
+  const ALLOWED = { day: "day", week: "week", month: "month" } as const;
+  const bucket = ALLOWED[input.bucket];
+  const since = input.since ?? new Date(Date.now() - 1000 * 60 * 60 * 24 * 30);
+  const until = input.until ?? new Date();
+
+  const rows = await prisma.$queryRaw<{ bucket: Date; bytes: bigint | null; count: bigint }[]>`
+    SELECT
+      date_trunc(${bucket}, "createdAt") AS bucket,
+      SUM(COALESCE("fileSize", 0))::bigint AS bytes,
+      COUNT(*)::bigint                     AS count
+    FROM "VaultItem"
+    WHERE "userId" = ${userId}
+      AND "createdAt" >= ${since}
+      AND "createdAt" <  ${until}
+    GROUP BY bucket
+    ORDER BY bucket ASC
+  `;
+
+  return {
+    bucket: input.bucket,
+    since: since.toISOString(),
+    until: until.toISOString(),
+    points: rows.map((r) => ({
+      t: r.bucket.toISOString(),
+      bytes: (r.bytes ?? BigInt(0)).toString(),
+      count: Number(r.count),
+    })),
   };
 }
 

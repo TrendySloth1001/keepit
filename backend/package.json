@@ -5,7 +5,9 @@
   "description": "Modular Express backend with TypeScript and Prisma",
   "main": "dist/server.js",
   "scripts": {
+    "predev": "npm run prisma:generate",
     "dev": "tsx watch src/server.ts",
+    "prestart": "npm run prisma:generate",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
