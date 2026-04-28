@@ -49,6 +49,15 @@ See the [documentation](website/README.md) for detailed setup instructions to:
 - Build and run the Flutter client
 - Access API reference and cryptography details
 
+## Documentation & Resources
+
+- 📖 [About Keepit](ABOUT.md) - Mission, philosophy, and team information
+- 🔍 [Issues & Resolutions](ISSUES.md) - Tracking problems and solutions
+- 📚 [Wiki](wiki/) - Comprehensive technical documentation
+  - [Architecture](wiki/01-Architecture.md)
+  - [Cryptography](wiki/02-Cryptography.md)
+  - [Database Schema](wiki/03-Database-Schema.md)
+
 ## License
 
 MIT
@@ -58,3 +67,7 @@ MIT
 - **Backend**: v1 — Stable
 - **Frontend**: Flutter, Android-first; iOS planned
 - **License**: MIT
+
+---
+
+**[Learn more about Keepit](ABOUT.md)** | **[Read the wiki](wiki/)** | **[Report an issue](ISSUES.md)**
