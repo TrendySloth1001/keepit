@@ -8,6 +8,7 @@ import '../../shared/storage/settings_service.dart';
 import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_snack.dart';
 import '../../shared/widgets/confirm_dialog.dart';
+import '../../shared/widgets/keepit_app_bar.dart';
 import '../auth/presentation/auth_notifier.dart';
 import 'settings_notifier.dart';
 
@@ -20,13 +21,7 @@ class SettingsPage extends ConsumerWidget {
     final user = ref.watch(authProvider).user;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
-        ),
-      ),
+      appBar: KeepItAppBar(title: 'Settings'),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.lg),
@@ -158,8 +153,9 @@ class SettingsPage extends ConsumerWidget {
                     _RadioRow(
                       label: option.label,
                       selected: settings.autoLock == option,
-                      onTap: () =>
-                          ref.read(settingsProvider.notifier).setAutoLock(option),
+                      onTap: () => ref
+                          .read(settingsProvider.notifier)
+                          .setAutoLock(option),
                     ),
                 ],
               ),
@@ -246,14 +242,20 @@ class SettingsPage extends ConsumerWidget {
       await notifier.setRememberMasterKey(true);
       await auth.persistCurrentKey();
       if (context.mounted) {
-        showAppSnack(context, 'Master password remembered',
-            kind: AppSnackKind.success);
+        showAppSnack(
+          context,
+          'Master password remembered',
+          kind: AppSnackKind.success,
+        );
       }
     } else {
       await notifier.setRememberMasterKey(false);
       if (context.mounted) {
-        showAppSnack(context, 'Stored master key cleared',
-            kind: AppSnackKind.info);
+        showAppSnack(
+          context,
+          'Stored master key cleared',
+          kind: AppSnackKind.info,
+        );
       }
     }
   }
@@ -353,7 +355,9 @@ class _DetailRow extends StatelessWidget {
             style: TextStyle(
               color: AppTheme.white,
               fontSize: AppType.body,
-              fontWeight: label == 'Accepted at' ? FontWeight.w600 : FontWeight.w800,
+              fontWeight: label == 'Accepted at'
+                  ? FontWeight.w600
+                  : FontWeight.w800,
               fontStyle: label == 'Accepted at' && value != 'Pending'
                   ? FontStyle.italic
                   : FontStyle.normal,

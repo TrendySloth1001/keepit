@@ -56,13 +56,13 @@ export default function Home() {
 
       {/* FEATURES */}
       <section className="features" id="features">
-        <Reveal className="section-head">
+        <Reveal className="section-head section-head--left">
           <span className="pill"><span className="pill__dot" /> Features</span>
           <h2>Built around one idea — <em>your data is yours.</em></h2>
-          <p>Every detail of Keepit is shaped by privacy, simplicity, and speed.</p>
+          <p>Privacy-first, quiet, and direct. Keepit is designed to feel clean, not crowded.</p>
         </Reveal>
 
-        <div className="grid">
+        <div className="feature-list">
           {[
             {
               ic: <Lock />, t: "End-to-end encryption",
@@ -90,10 +90,15 @@ export default function Home() {
             },
           ].map((f, i) => (
             <Reveal key={i}>
-              <article className="card">
-                <div className="card__ic">{f.ic}</div>
-                <h3>{f.t}</h3>
-                <p>{f.d}</p>
+              <article className="feature-row">
+                <div className="feature-row__ic">{f.ic}</div>
+                <div className="feature-row__content">
+                  <div className="feature-row__head">
+                    <h3>{f.t}</h3>
+                    <span className="feature-row__index">{String(i + 1).padStart(2, "0")}</span>
+                  </div>
+                  <p>{f.d}</p>
+                </div>
               </article>
             </Reveal>
           ))}

@@ -12,6 +12,7 @@ import '../../../../shared/utils/format.dart';
 import '../../../../shared/widgets/app_button.dart';
 import '../../../../shared/widgets/app_snack.dart';
 import '../../../../shared/widgets/inline_message.dart';
+import '../../../../shared/widgets/keepit_app_bar.dart';
 import '../../data/vault_models.dart';
 import '../storage_notifier.dart';
 import '../vault_notifier.dart';
@@ -125,7 +126,7 @@ class _VaultUploaderPageState extends ConsumerState<VaultUploaderPage> {
   Widget build(BuildContext context) {
     final isImage = widget.type == VaultItemType.image;
     return Scaffold(
-      appBar: AppBar(title: Text(isImage ? 'Upload image' : 'Upload file')),
+      appBar: KeepItAppBar(title: isImage ? 'Upload image' : 'Upload file'),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.lg),

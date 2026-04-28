@@ -9,6 +9,7 @@ import '../../../../shared/widgets/app_button.dart';
 import '../../../../shared/widgets/app_snack.dart';
 import '../../../../shared/widgets/confirm_dialog.dart';
 import '../../../../shared/widgets/inline_message.dart';
+import '../../../../shared/widgets/keepit_app_bar.dart';
 import '../../../../shared/widgets/shimmer_box.dart';
 import '../../data/vault_models.dart';
 import '../vault_notifier.dart';
@@ -158,8 +159,8 @@ class _VaultPasswordEditorState extends ConsumerState<VaultPasswordEditor> {
           if (_isEditing)
             IconButton(
               icon: const Icon(Icons.delete_outline, color: AppTheme.error),
-              tooltip: 'Delete',
-              onPressed: _delete,
+        appBar: KeepItAppBar(
+          title: _isEditing ? 'Edit password' : 'New password',
             ),
         ],
       ),

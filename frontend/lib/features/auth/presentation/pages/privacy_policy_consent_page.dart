@@ -5,6 +5,7 @@ import '../../../../app/theme/app_theme.dart';
 import '../../../../app/theme/tokens.dart';
 import '../../../../shared/widgets/app_button.dart';
 import '../../../../shared/widgets/app_snack.dart';
+import '../../../../shared/widgets/keepit_app_bar.dart';
 import '../../data/auth_models.dart';
 import '../../data/auth_repository.dart';
 import '../auth_notifier.dart';
@@ -17,7 +18,8 @@ class PrivacyPolicyConsentPage extends ConsumerStatefulWidget {
       _PrivacyPolicyConsentPageState();
 }
 
-class _PrivacyPolicyConsentPageState extends ConsumerState<PrivacyPolicyConsentPage> {
+class _PrivacyPolicyConsentPageState
+    extends ConsumerState<PrivacyPolicyConsentPage> {
   bool _acknowledged = false;
   late final Future<PrivacyPolicyDocument> _policyFuture;
 
@@ -33,23 +35,23 @@ class _PrivacyPolicyConsentPageState extends ConsumerState<PrivacyPolicyConsentP
     final notifier = ref.read(authProvider.notifier);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Privacy Policy Consent'),
-        automaticallyImplyLeading: false,
-      ),
+      appBar: const KeepItAppBar(title: 'Privacy Policy Consent'),
       body: SafeArea(
         child: FutureBuilder<PrivacyPolicyDocument>(
           future: _policyFuture,
           builder: (context, snapshot) {
             final policy = snapshot.data;
-            final isLoading = snapshot.connectionState == ConnectionState.waiting;
+            final isLoading =
+                snapshot.connectionState == ConnectionState.waiting;
 
             return LayoutBuilder(
               builder: (context, constraints) {
                 return SingleChildScrollView(
                   padding: const EdgeInsets.all(AppSpacing.lg),
                   child: ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -71,16 +73,17 @@ class _PrivacyPolicyConsentPageState extends ConsumerState<PrivacyPolicyConsentP
                                   ),
                                 )
                               : snapshot.hasError
-                                  ? const _PolicyError(
-                                      message:
-                                          'Unable to load the latest policy. Please retry.',
-                                    )
-                                  : _PolicyBody(policy: policy!),
+                              ? const _PolicyError(
+                                  message:
+                                      'Unable to load the latest policy. Please retry.',
+                                )
+                              : _PolicyBody(policy: policy!),
                         ),
                         const SizedBox(height: AppSpacing.lg),
                         _ConsentPanel(
                           acknowledged: _acknowledged,
-                          onChanged: (value) => setState(() => _acknowledged = value),
+                          onChanged: (value) =>
+                              setState(() => _acknowledged = value),
                         ),
                         const SizedBox(height: AppSpacing.lg),
                         _PolicyCard(
@@ -90,18 +93,27 @@ class _PrivacyPolicyConsentPageState extends ConsumerState<PrivacyPolicyConsentP
                           child: const Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _RuleLine(text: 'Keep your master password safe.'),
+                              _RuleLine(
+                                text: 'Keep your master password safe.',
+                              ),
                               SizedBox(height: AppSpacing.sm),
-                              _RuleLine(text: 'The server cannot read your vault data.'),
+                              _RuleLine(
+                                text: 'The server cannot read your vault data.',
+                              ),
                               SizedBox(height: AppSpacing.sm),
-                              _RuleLine(text: 'Acceptance is required to access the vault.'),
+                              _RuleLine(
+                                text:
+                                    'Acceptance is required to access the vault.',
+                              ),
                             ],
                           ),
                         ),
                         const SizedBox(height: AppSpacing.lg),
                         if (auth.errorMessage != null)
                           Padding(
-                            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.sm,
+                            ),
                             child: Text(
                               auth.errorMessage!,
                               style: const TextStyle(
@@ -116,7 +128,8 @@ class _PrivacyPolicyConsentPageState extends ConsumerState<PrivacyPolicyConsentP
                               ? 'Saving consent...'
                               : 'Accept policy and continue',
                           icon: Icons.verified,
-                          onPressed: !_acknowledged || auth.isBusy || policy == null
+                          onPressed:
+                              !_acknowledged || auth.isBusy || policy == null
                               ? null
                               : () async {
                                   await notifier.acceptLatestPrivacyPolicy();
@@ -188,9 +201,12 @@ class _PolicyHero extends StatelessWidget {
                           height: 1.45,
                         ),
                         children: [
-                          TextSpan(text: 'Please review the policy carefully. '),
                           TextSpan(
-                            text: 'The bold, underlined statements below are the binding parts.',
+                            text: 'Please review the policy carefully. ',
+                          ),
+                          TextSpan(
+                            text:
+                                'The bold, underlined statements below are the binding parts.',
                             style: TextStyle(
                               fontWeight: FontWeight.w800,
                               decoration: TextDecoration.underline,
@@ -306,8 +322,9 @@ class _SummaryTile extends StatelessWidget {
               fontSize: AppType.body,
               fontWeight: emphasized ? FontWeight.w800 : FontWeight.w600,
               fontStyle: emphasized ? FontStyle.italic : FontStyle.normal,
-              decoration:
-                  emphasized ? TextDecoration.underline : TextDecoration.none,
+              decoration: emphasized
+                  ? TextDecoration.underline
+                  : TextDecoration.none,
               decorationThickness: 1.5,
               height: 1.4,
             ),
@@ -597,7 +614,9 @@ List<InlineSpan> _parseInlineStyles(String text) {
         style: TextStyle(
           fontWeight: bold ? FontWeight.w900 : FontWeight.normal,
           fontStyle: italic ? FontStyle.italic : FontStyle.normal,
-          decoration: underline ? TextDecoration.underline : TextDecoration.none,
+          decoration: underline
+              ? TextDecoration.underline
+              : TextDecoration.none,
           decorationThickness: 1.5,
         ),
       ),

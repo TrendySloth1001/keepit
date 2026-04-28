@@ -4,8 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/theme/app_theme.dart';
 import '../../../../shared/widgets/shimmer_box.dart';
 import '../auth_notifier.dart';
-
-class MasterSetupPage extends ConsumerStatefulWidget {
+import '../../../../app/theme/app_theme.dart';
+import '../../../../shared/widgets/keepit_app_bar.dart';
+import '../../../../shared/widgets/shimmer_box.dart';
   const MasterSetupPage({super.key});
 
   @override
@@ -42,7 +43,7 @@ class _MasterSetupPageState extends ConsumerState<MasterSetupPage> {
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Set master password')),
+      appBar: const KeepItAppBar(title: 'Set master password'),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),

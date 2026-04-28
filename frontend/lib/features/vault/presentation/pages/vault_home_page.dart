@@ -6,6 +6,7 @@ import '../../../../app/theme/app_theme.dart';
 import '../../../../app/theme/tokens.dart';
 import '../../../../shared/widgets/empty_state.dart';
 import '../../../../shared/widgets/inline_message.dart';
+import '../../../../shared/widgets/keepit_app_bar.dart';
 import '../../../../shared/widgets/shimmer_box.dart';
 import '../../../auth/presentation/auth_notifier.dart';
 import '../../data/vault_models.dart';
@@ -100,8 +101,8 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
 
     return AutoLockScope(
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(user?.name ?? 'Vault'),
+        appBar: KeepItAppBar(
+          title: user?.name ?? 'Vault',
           actions: [
             IconButton(
               tooltip: 'Lock',
