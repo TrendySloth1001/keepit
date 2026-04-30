@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+
+import 'keepit_logo.dart';
 
 class KeepItAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
@@ -19,16 +20,11 @@ class KeepItAppBar extends StatelessWidget implements PreferredSizeWidget {
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
-            width: 32,
-            height: 32,
-            child: SvgPicture.asset(
-              'assets/images/logo.svg',
-              colorFilter: ColorFilter.mode(
+          KeepItLogo(
+            size: 32,
+            foregroundColor:
                 Theme.of(context).appBarTheme.foregroundColor ?? Colors.white,
-                BlendMode.srcIn,
-              ),
-            ),
+            showBackground: false,
           ),
           const SizedBox(width: 12),
           Text(title),

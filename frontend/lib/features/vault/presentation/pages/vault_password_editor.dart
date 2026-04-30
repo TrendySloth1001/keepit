@@ -153,14 +153,13 @@ class _VaultPasswordEditorState extends ConsumerState<VaultPasswordEditor> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_isEditing ? 'Edit password' : 'New password'),
+      appBar: KeepItAppBar(
+        title: _isEditing ? 'Edit password' : 'New password',
         actions: [
           if (_isEditing)
             IconButton(
               icon: const Icon(Icons.delete_outline, color: AppTheme.error),
-        appBar: KeepItAppBar(
-          title: _isEditing ? 'Edit password' : 'New password',
+              onPressed: _delete,
             ),
         ],
       ),

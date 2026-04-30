@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/theme/app_theme.dart';
-import '../../../../shared/widgets/shimmer_box.dart';
-import '../auth_notifier.dart';
-import '../../../../app/theme/app_theme.dart';
 import '../../../../shared/widgets/keepit_app_bar.dart';
 import '../../../../shared/widgets/shimmer_box.dart';
+import '../auth_notifier.dart';
+
+class MasterSetupPage extends ConsumerStatefulWidget {
   const MasterSetupPage({super.key});
 
   @override

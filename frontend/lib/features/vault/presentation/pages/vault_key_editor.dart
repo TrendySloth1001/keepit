@@ -123,14 +123,14 @@ class _VaultKeyEditorState extends ConsumerState<VaultKeyEditor> {
   Widget build(BuildContext context) {
     final isEditing = widget.existing != null;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(isEditing ? 'Edit key' : 'New key'),
+      appBar: KeepItAppBar(
+        title: isEditing ? 'Edit key' : 'New key',
         actions: [
           if (isEditing)
             IconButton(
               icon: const Icon(Icons.delete_outline, color: AppTheme.error),
-        appBar: KeepItAppBar(
-          title: isEditing ? 'Edit key' : 'New key',
+              onPressed: _delete,
+            ),
         ],
       ),
       body: SafeArea(

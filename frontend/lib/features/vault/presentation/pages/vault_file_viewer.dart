@@ -157,13 +157,13 @@ class _VaultFileViewerState extends ConsumerState<VaultFileViewer> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.item.title, overflow: TextOverflow.ellipsis),
+      appBar: KeepItAppBar(
+        title: widget.item.title,
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_outline, color: AppTheme.error),
-        appBar: KeepItAppBar(
-          title: widget.item.title,
+            onPressed: _delete,
+          ),
         ],
       ),
       body: SafeArea(

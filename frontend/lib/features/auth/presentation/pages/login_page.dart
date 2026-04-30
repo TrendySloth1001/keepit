@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/theme/app_theme.dart';
+import '../../../../shared/widgets/keepit_logo.dart';
 import '../../../../shared/widgets/shimmer_box.dart';
 import '../auth_notifier.dart';
 
@@ -21,18 +22,16 @@ class LoginPage extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Spacer(),
-              const Text(
-                'KeepIt',
-                style: TextStyle(
-                  color: AppTheme.white,
-                  fontSize: 56,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -2,
+              const Center(
+                child: KeepItLogo(
+                  size: 112,
+                  foregroundColor: AppTheme.white,
                 ),
               ),
               const SizedBox(height: 12),
               const Text(
                 'Your private vault.\nEnd-to-end encrypted.',
+                textAlign: TextAlign.center,
                 style: TextStyle(
                   color: AppTheme.white,
                   fontSize: 16,

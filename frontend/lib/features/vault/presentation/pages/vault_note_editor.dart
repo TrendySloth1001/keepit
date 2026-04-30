@@ -111,14 +111,14 @@ class _VaultNoteEditorState extends ConsumerState<VaultNoteEditor> {
   Widget build(BuildContext context) {
     final isEditing = widget.existing != null;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(isEditing ? 'Edit note' : 'New note'),
+      appBar: KeepItAppBar(
+        title: isEditing ? 'Edit note' : 'New note',
         actions: [
           if (isEditing)
             IconButton(
               icon: const Icon(Icons.delete_outline, color: AppTheme.error),
-        appBar: KeepItAppBar(
-          title: isEditing ? 'Edit note' : 'New note',
+              onPressed: _delete,
+            ),
         ],
       ),
       body: SafeArea(
