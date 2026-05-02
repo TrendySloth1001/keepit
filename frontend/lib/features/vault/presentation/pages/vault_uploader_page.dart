@@ -25,6 +25,10 @@ class VaultUploaderPage extends ConsumerStatefulWidget {
   ConsumerState<VaultUploaderPage> createState() => _VaultUploaderPageState();
 }
 
+/// Hard ceiling enforced server-side too. Keep in sync with backend
+/// `MAX_UPLOAD_BYTES` env (defaults to 15 MB, range 10–20 MB).
+const int _maxUploadBytes = 15 * 1024 * 1024;
+
 class _VaultUploaderPageState extends ConsumerState<VaultUploaderPage> {
   final _title = TextEditingController();
   Uint8List? _bytes;
@@ -69,6 +73,16 @@ class _VaultUploaderPageState extends ConsumerState<VaultUploaderPage> {
         _bytes = f.bytes!;
         _filename = f.name;
         _mime = 'application/octet-stream';
+      }
+      if (_bytes != null && _bytes!.length > _maxUploadBytes) {
+        final limitMb = (_maxUploadBytes / (1024 * 1024)).toStringAsFixed(0);
+        setState(() {
+          _error = 'File is too large. Maximum upload size is $limitMb MB.';
+          _bytes = null;
+          _filename = null;
+          _mime = null;
+        });
+        return;
       }
       if (_title.text.isEmpty && _filename != null) {
         _title.text = _filename!;
@@ -214,12 +228,13 @@ class _VaultUploaderPageState extends ConsumerState<VaultUploaderPage> {
                 onPressed: _upload,
               ),
               const SizedBox(height: AppSpacing.sm),
-              const Text(
+              Text(
                 'The file is encrypted on this device before being uploaded. '
-                'The server never sees the contents.',
+                'The server never sees the contents. '
+                'Max upload size: ${(_maxUploadBytes / (1024 * 1024)).toStringAsFixed(0)} MB.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppTheme.white,
+                style: const TextStyle(
+                  color: AppTheme.muted,
                   fontSize: AppType.micro,
                 ),
               ),

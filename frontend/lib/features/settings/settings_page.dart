@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../app/theme/app_theme.dart';
+import '../../app/theme/sketch.dart';
 import '../../app/theme/tokens.dart';
 import '../../shared/storage/settings_service.dart';
 import '../../shared/widgets/app_button.dart';
@@ -33,9 +35,9 @@ class SettingsPage extends ConsumerWidget {
                   children: [
                     Text(
                       user.name,
-                      style: const TextStyle(
-                        color: AppTheme.white,
-                        fontSize: AppType.subtitle,
+                      style: GoogleFonts.patrickHand(
+                        color: AppTheme.fg,
+                        fontSize: 22,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -43,7 +45,7 @@ class SettingsPage extends ConsumerWidget {
                     Text(
                       user.email,
                       style: const TextStyle(
-                        color: AppTheme.white,
+                        color: AppTheme.muted,
                         fontSize: AppType.caption,
                       ),
                     ),
@@ -60,23 +62,25 @@ class SettingsPage extends ConsumerWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(AppSpacing.sm),
-                          decoration: BoxDecoration(
-                            color: user.policyAcceptedCurrent
-                                ? AppTheme.white
-                                : AppTheme.black,
-                            border: Border.all(color: AppTheme.white),
-                            borderRadius: AppRadius.brPill,
-                          ),
-                          child: Icon(
-                            user.policyAcceptedCurrent
-                                ? Icons.verified
-                                : Icons.error_outline,
-                            color: user.policyAcceptedCurrent
-                                ? AppTheme.black
-                                : AppTheme.white,
-                            size: AppIconSize.md,
+                        SizedBox(
+                          width: 44,
+                          height: 44,
+                          child: CustomPaint(
+                            size: Size.infinite,
+                            painter: _SketchBadgePainter(
+                              accepted: user.policyAcceptedCurrent,
+                            ),
+                            child: Center(
+                              child: Icon(
+                                user.policyAcceptedCurrent
+                                    ? Icons.verified
+                                    : Icons.error_outline,
+                                color: user.policyAcceptedCurrent
+                                    ? AppTheme.onPrimary
+                                    : AppTheme.fg,
+                                size: AppIconSize.md,
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(width: AppSpacing.md),
@@ -88,8 +92,8 @@ class SettingsPage extends ConsumerWidget {
                                 user.policyAcceptedCurrent
                                     ? 'Privacy policy accepted'
                                     : 'Privacy policy not yet accepted',
-                                style: const TextStyle(
-                                  color: AppTheme.white,
+                                style: GoogleFonts.patrickHand(
+                                  color: AppTheme.fg,
                                   fontSize: AppType.subtitle,
                                   fontWeight: FontWeight.w800,
                                 ),
@@ -100,7 +104,7 @@ class SettingsPage extends ConsumerWidget {
                                     ? 'The current policy version has been accepted for this account.'
                                     : 'The vault stays blocked until you accept the latest policy version.',
                                 style: const TextStyle(
-                                  color: AppTheme.white,
+                                  color: AppTheme.muted,
                                   fontSize: AppType.caption,
                                   height: 1.4,
                                 ),
@@ -142,7 +146,7 @@ class SettingsPage extends ConsumerWidget {
                     'Lock the vault after this much idle time. '
                     'In-app inactivity and time spent in the background both count.',
                     style: TextStyle(
-                      color: AppTheme.white,
+                      color: AppTheme.fg,
                       fontSize: AppType.caption,
                       height: 1.4,
                     ),
@@ -172,7 +176,7 @@ class SettingsPage extends ConsumerWidget {
                     'storage (Android Keystore / iOS Keychain). The server '
                     'still never sees the key.',
                     style: TextStyle(
-                      color: AppTheme.white,
+                      color: AppTheme.fg,
                       fontSize: AppType.caption,
                       height: 1.4,
                     ),
@@ -190,13 +194,14 @@ class SettingsPage extends ConsumerWidget {
                   const SizedBox(height: AppSpacing.md),
                   SwitchListTile.adaptive(
                     contentPadding: EdgeInsets.zero,
-                    activeThumbColor: AppTheme.white,
-                    title: const Text(
+                    activeThumbColor: AppTheme.fg,
+                    activeTrackColor: AppTheme.primary,
+                    title: Text(
                       'Remember on this device',
-                      style: TextStyle(
-                        color: AppTheme.white,
+                      style: GoogleFonts.patrickHand(
+                        color: AppTheme.fg,
                         fontSize: AppType.body,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     value: settings.rememberMasterKey,
@@ -295,11 +300,11 @@ class _SectionHeader extends StatelessWidget {
       ),
       child: Text(
         text.toUpperCase(),
-        style: const TextStyle(
-          color: AppTheme.white,
+        style: GoogleFonts.patrickHand(
+          color: AppTheme.muted,
           fontSize: AppType.micro,
           fontWeight: FontWeight.w800,
-          letterSpacing: 1.2,
+          letterSpacing: 1.4,
         ),
       ),
     );
@@ -312,13 +317,11 @@ class _Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SketchBox(
       padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppTheme.black,
-        border: Border.all(color: AppTheme.white),
-        borderRadius: AppRadius.brLg,
-      ),
+      radius: 18,
+      fill: AppTheme.surface,
+      seed: identityHashCode(child),
       child: child,
     );
   }
@@ -336,14 +339,14 @@ class _DetailRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: 110,
+          width: 130,
           child: Text(
             label.toUpperCase(),
-            style: const TextStyle(
-              color: AppTheme.white,
+            style: GoogleFonts.patrickHand(
+              color: AppTheme.muted,
               fontSize: AppType.micro,
               fontWeight: FontWeight.w900,
-              letterSpacing: 1.1,
+              letterSpacing: 1.2,
             ),
           ),
         ),
@@ -351,8 +354,8 @@ class _DetailRow extends StatelessWidget {
         Expanded(
           child: Text(
             value,
-            style: TextStyle(
-              color: AppTheme.white,
+            style: GoogleFonts.patrickHand(
+              color: AppTheme.fg,
               fontSize: AppType.body,
               fontWeight: label == 'Accepted at'
                   ? FontWeight.w600
@@ -389,20 +392,24 @@ class _RadioRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
         child: Row(
           children: [
-            Icon(
-              selected
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked,
-              size: AppIconSize.md,
-              color: AppTheme.white,
+            SizedBox(
+              width: 22,
+              height: 22,
+              child: CustomPaint(
+                size: Size.infinite,
+                painter: _RadioPainter(
+                  selected: selected,
+                  seed: label.hashCode,
+                ),
+              ),
             ),
             const SizedBox(width: AppSpacing.md),
             Text(
               label,
-              style: const TextStyle(
-                color: AppTheme.white,
+              style: GoogleFonts.patrickHand(
+                color: AppTheme.fg,
                 fontSize: AppType.body,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
@@ -410,4 +417,57 @@ class _RadioRow extends StatelessWidget {
       ),
     );
   }
+}
+
+class _RadioPainter extends CustomPainter {
+  _RadioPainter({required this.selected, required this.seed});
+  final bool selected;
+  final int seed;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final border = RoughCircleBorder(
+        color: AppTheme.fg, strokeWidth: 1.4, seed: seed);
+    border.paint(canvas, rect);
+    if (selected) {
+      final inner = rect.deflate(5);
+      final fill = SketchPaint.roughRRect(inner, inner.width / 2,
+          seed: seed + 1, jitter: 0.6);
+      canvas.drawPath(
+        fill,
+        Paint()..color = AppTheme.fg..style = PaintingStyle.fill,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_RadioPainter old) =>
+      old.selected != selected || old.seed != seed;
+}
+
+class _SketchBadgePainter extends CustomPainter {
+  _SketchBadgePainter({required this.accepted});
+  final bool accepted;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    if (accepted) {
+      final path = const RoughCircleBorder(seed: 51).getOuterPath(rect);
+      canvas.drawPath(
+        path,
+        Paint()..color = AppTheme.primary..style = PaintingStyle.fill,
+      );
+      SketchPaint.hatch(canvas, path,
+          color: AppTheme.onPrimary.withValues(alpha: 0.20),
+          spacing: 4,
+          seed: 52);
+    }
+    const RoughCircleBorder(color: AppTheme.fg, strokeWidth: 1.5, seed: 51)
+        .paint(canvas, rect);
+  }
+
+  @override
+  bool shouldRepaint(_SketchBadgePainter old) => old.accepted != accepted;
 }

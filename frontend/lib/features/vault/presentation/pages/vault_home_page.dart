@@ -180,8 +180,8 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
           await notifier.refresh();
           await ref.read(storageProvider.notifier).refresh();
         },
-        color: AppTheme.white,
-        backgroundColor: AppTheme.black,
+        color: AppTheme.primary,
+        backgroundColor: AppTheme.surface,
         child: ListView(
           children: [
             SizedBox(height: MediaQuery.of(context).size.height * 0.1),

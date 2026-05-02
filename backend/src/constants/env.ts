@@ -16,7 +16,23 @@ const envSchema = z.object({
   JWT_TTL_SECONDS: z.coerce.number().int().positive().default(60 * 60 * 24 * 30),
   PRIVACY_POLICY_ADMIN_KEY: z.string().min(16).default("replace-with-strong-policy-admin-key"),
   USER_QUOTA_BYTES: z.coerce.number().int().positive().default(262_144_000),
-  MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(50 * 1024 * 1024),
+  // Per-file ciphertext upload cap. Hard ceiling — clients must reject before
+  // initiating. Kept conservative (15 MB) to bound S3 cost and protect the
+  // backend from oversize chunked transfers. Allowed range: 10–20 MB.
+  MAX_UPLOAD_BYTES: z.coerce
+    .number()
+    .int()
+    .min(10 * 1024 * 1024)
+    .max(20 * 1024 * 1024)
+    .default(15 * 1024 * 1024),
+  // Sliding-window upload rate limit per user (uploads initiated per hour).
+  UPLOAD_RATE_LIMIT_PER_HOUR: z.coerce.number().int().positive().default(30),
+  // Sliding-window upload byte budget per user (total bytes per hour).
+  UPLOAD_BYTES_PER_HOUR: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(150 * 1024 * 1024),
 });
 
 export const env = envSchema.parse(process.env);

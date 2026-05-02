@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/theme/app_theme.dart';
+import '../../../../app/theme/sketch.dart';
 import '../../../../app/theme/tokens.dart';
 import '../../data/vault_models.dart';
 
@@ -22,7 +23,7 @@ class TypeFilter extends StatelessWidget {
     ];
 
     return SizedBox(
-      height: 44,
+      height: 48,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
@@ -31,36 +32,43 @@ class TypeFilter extends StatelessWidget {
         itemBuilder: (_, i) {
           final (type, label, icon) = entries[i];
           final selected = type == value;
-          return InkWell(
-            onTap: () => onChanged(type),
-            borderRadius: AppRadius.brPill,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.sm,
-              ),
-              decoration: BoxDecoration(
-                color: selected ? AppTheme.white : AppTheme.black,
-                border: Border.all(color: AppTheme.white),
-                borderRadius: AppRadius.brPill,
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    icon,
-                    size: AppIconSize.sm,
-                    color: selected ? AppTheme.black : AppTheme.white,
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: selected ? AppTheme.black : AppTheme.white,
-                      fontSize: AppType.caption,
-                      fontWeight: FontWeight.w700,
+          // Alternating tilt so chips sit slightly out-of-square.
+          final tilt = (i.isEven ? 1 : -1) * 0.01;
+          return Transform.rotate(
+            angle: tilt,
+            child: InkWell(
+              onTap: () => onChanged(type),
+              borderRadius: AppRadius.brPill,
+              child: SketchBox(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.xs,
+                ),
+                radius: 999,
+                fill: selected ? AppTheme.primary : AppTheme.surface,
+                hatchColor:
+                    selected ? AppTheme.onPrimary.withValues(alpha: 0.20) : null,
+                hatchSpacing: 5,
+                seed: label.hashCode,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      icon,
+                      size: AppIconSize.sm,
+                      color: selected ? AppTheme.onPrimary : AppTheme.fg,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: selected ? AppTheme.onPrimary : AppTheme.fg,
+                        fontSize: AppType.body,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           );

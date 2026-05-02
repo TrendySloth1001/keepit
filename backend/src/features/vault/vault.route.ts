@@ -1,5 +1,6 @@
 import express, { Router } from "express";
 import { requireAuth } from "../../shared/auth/middleware";
+import { uploadRateLimiter } from "../../shared/upload-rate-limit";
 import {
   abortUploadCtl,
   batchDelete,
@@ -27,16 +28,22 @@ vaultRouter.get("/storage", storage);
 vaultRouter.get("/storage/timeline", storageTimeline);
 vaultRouter.post("/items/batch", batchGet);
 vaultRouter.post("/items/batch-delete", batchDelete);
-vaultRouter.post("/uploads/initiate", initiateUploadCtl);
-vaultRouter.post("/uploads/finalize", finalizeUploadCtl);
+// Upload endpoints are aggressively rate-limited (per-user request count
+// and bytes-per-hour) on top of per-file size cap. The express.raw limits
+// are intentionally just above the per-chunk / per-file ceiling — anything
+// larger is rejected at the parser before hitting handler logic.
+vaultRouter.post("/uploads/initiate", uploadRateLimiter(), initiateUploadCtl);
+vaultRouter.post("/uploads/finalize", uploadRateLimiter(), finalizeUploadCtl);
 vaultRouter.post(
   "/uploads/:itemId/content",
-  express.raw({ type: "application/octet-stream", limit: "60mb" }),
+  uploadRateLimiter(),
+  express.raw({ type: "application/octet-stream", limit: "16mb" }),
   uploadContentCtl,
 );
 vaultRouter.post(
   "/uploads/:itemId/chunks/:partNumber",
-  express.raw({ type: "application/octet-stream", limit: "10mb" }),
+  uploadRateLimiter(),
+  express.raw({ type: "application/octet-stream", limit: "6mb" }),
   uploadChunkCtl,
 );
 vaultRouter.delete("/uploads/:itemId", abortUploadCtl);

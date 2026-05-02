@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../app/theme/app_theme.dart';
+import '../../app/theme/sketch.dart';
 import '../../app/theme/tokens.dart';
 
 class EmptyState extends StatelessWidget {
@@ -24,22 +26,32 @@ class EmptyState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: AppIconSize.huge, color: AppTheme.white),
+          SizedBox(
+            height: 96,
+            width: 96,
+            child: CustomPaint(
+              painter: _StampPainter(seed: title.hashCode),
+              child: Center(
+                child: Icon(icon, size: 40, color: AppTheme.fg),
+              ),
+            ),
+          ),
           const SizedBox(height: AppSpacing.lg),
           Text(
             title,
-            style: const TextStyle(
-              color: AppTheme.white,
-              fontSize: AppType.subtitle,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.caveat(
+              color: AppTheme.fg,
+              fontSize: 30,
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.xs),
           Text(
             message,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              color: AppTheme.white,
+              color: AppTheme.muted,
               fontSize: AppType.body,
               height: 1.4,
             ),
@@ -52,4 +64,24 @@ class EmptyState extends StatelessWidget {
       ),
     );
   }
+}
+
+class _StampPainter extends CustomPainter {
+  _StampPainter({required this.seed});
+  final int seed;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final border = const RoughCircleBorder(color: AppTheme.fg, strokeWidth: 1.6);
+    final path = border.getOuterPath(rect);
+    SketchPaint.hatch(canvas, path,
+        color: AppTheme.primary.withValues(alpha: 0.35),
+        spacing: 6,
+        seed: seed);
+    border.paint(canvas, rect);
+  }
+
+  @override
+  bool shouldRepaint(covariant _StampPainter old) => old.seed != seed;
 }

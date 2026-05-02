@@ -14,12 +14,12 @@ Future<bool> showConfirmDialog(
 }) async {
   final result = await showDialog<bool>(
     context: context,
-    barrierColor: AppTheme.black.withValues(alpha: 0.7),
+    barrierColor: AppTheme.ink.withValues(alpha: 0.4),
     builder: (ctx) => AlertDialog(
       title: Text(title),
       content: Text(
         message,
-        style: const TextStyle(color: AppTheme.white, fontSize: AppType.body, height: 1.4),
+        style: const TextStyle(color: AppTheme.fg, fontSize: AppType.body, height: 1.4),
       ),
       actionsPadding: const EdgeInsets.fromLTRB(
         AppSpacing.lg,

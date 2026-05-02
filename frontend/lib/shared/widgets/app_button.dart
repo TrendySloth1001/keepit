@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_theme.dart';
+import '../../app/theme/sketch.dart';
 import '../../app/theme/tokens.dart';
-import 'shimmer_box.dart';
 
 enum AppButtonVariant { primary, secondary, danger }
 
+/// Standard CTA — replaced with the hand-drawn [SketchButton] look so
+/// every action across the app reads as a sketchbook UI element.
 class AppButton extends StatelessWidget {
   const AppButton({
     super.key,
@@ -26,64 +28,29 @@ class AppButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final child = isBusy
-        ? const ShimmerBox(width: 72, height: 18, borderRadius: 9)
-        : Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: AppIconSize.md),
-                const SizedBox(width: AppSpacing.sm),
-              ],
-              Text(label),
-            ],
-          );
-
-    final style = ButtonStyle(
-      minimumSize: WidgetStateProperty.all(
-        Size(fullWidth ? double.infinity : 0, AppLayout.buttonHeight),
-      ),
-      shape: WidgetStateProperty.all(
-        RoundedRectangleBorder(
-          borderRadius: AppRadius.brMd,
-          side: BorderSide(
-            color: variant == AppButtonVariant.danger
-                ? AppTheme.error
-                : AppTheme.white,
-          ),
-        ),
-      ),
-      foregroundColor: WidgetStateProperty.all(switch (variant) {
-        AppButtonVariant.primary => AppTheme.black,
-        AppButtonVariant.secondary => AppTheme.white,
-        AppButtonVariant.danger => AppTheme.error,
-      }),
-      backgroundColor: WidgetStateProperty.all(switch (variant) {
-        AppButtonVariant.primary => AppTheme.white,
-        AppButtonVariant.secondary => AppTheme.black,
-        AppButtonVariant.danger => AppTheme.black,
-      }),
-    );
-
-    final button = switch (variant) {
-      AppButtonVariant.primary => ElevatedButton(
-        style: style,
-        onPressed: isBusy ? null : onPressed,
-        child: child,
-      ),
-      AppButtonVariant.secondary => OutlinedButton(
-        style: style,
-        onPressed: isBusy ? null : onPressed,
-        child: child,
-      ),
-      AppButtonVariant.danger => OutlinedButton(
-        style: style,
-        onPressed: isBusy ? null : onPressed,
-        child: child,
-      ),
+    final fill = switch (variant) {
+      AppButtonVariant.primary => AppTheme.primary,
+      AppButtonVariant.secondary => AppTheme.surface,
+      AppButtonVariant.danger => AppTheme.surface,
     };
-
+    final fg = switch (variant) {
+      AppButtonVariant.primary => AppTheme.onPrimary,
+      AppButtonVariant.secondary => AppTheme.fg,
+      AppButtonVariant.danger => AppTheme.error,
+    };
+    final button = SizedBox(
+      height: AppLayout.buttonHeight,
+      width: fullWidth ? double.infinity : null,
+      child: SketchButton(
+        label: label,
+        icon: icon,
+        onPressed: onPressed,
+        busy: isBusy,
+        fullWidth: fullWidth,
+        fill: fill,
+        foreground: fg,
+      ),
+    );
     return button;
   }
 }

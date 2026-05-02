@@ -292,7 +292,11 @@ export async function deleteVaultItem(userId: string, id: string): Promise<void>
 
 export async function initiateUpload(userId: string, input: InitiateUploadInput) {
   if (input.fileSize > env.MAX_UPLOAD_BYTES) {
-    throw new HttpError(HTTP_STATUS.PAYLOAD_TOO_LARGE, MESSAGES.UPLOAD_TOO_LARGE);
+    const limitMb = (env.MAX_UPLOAD_BYTES / (1024 * 1024)).toFixed(0);
+    throw new HttpError(
+      HTTP_STATUS.PAYLOAD_TOO_LARGE,
+      `${MESSAGES.UPLOAD_TOO_LARGE} (max ${limitMb} MB).`,
+    );
   }
 
   // Reserve quota atomically: conditional UPDATE only succeeds if capacity remains.
