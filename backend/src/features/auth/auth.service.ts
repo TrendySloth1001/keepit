@@ -12,6 +12,7 @@ import {
 import type {
   GoogleSignInInput,
   MasterInitInput,
+  MasterRotateInput,
   MasterVerifyInput,
 } from "./auth.schema";
 
@@ -146,6 +147,85 @@ export async function verifyMasterPassword(userId: string, input: MasterVerifyIn
   if (!ok) {
     throw new HttpError(HTTP_STATUS.UNAUTHORIZED, MESSAGES.MASTER_VERIFY_FAILED);
   }
+}
+
+/**
+ * Rotates the user's master password. The client has already:
+ *   - decrypted every vault item with the old key
+ *   - re-encrypted them with a fresh key derived from the new password
+ *   - re-wrapped the X25519 share private key (if any)
+ *
+ * This handler verifies the current password (via verifier), then atomically
+ * applies the new salt/verifier/params and bulk-replaces every item's
+ * ciphertext. If anything fails, the transaction rolls back and the user
+ * keeps their old password.
+ */
+export async function rotateMasterPassword(
+  userId: string,
+  input: MasterRotateInput,
+): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new HttpError(HTTP_STATUS.NOT_FOUND, MESSAGES.USER_NOT_FOUND);
+  if (!user.masterVerifier) {
+    throw new HttpError(HTTP_STATUS.BAD_REQUEST, MESSAGES.MASTER_NOT_INITIALIZED);
+  }
+  const ok = await argon2.verify(user.masterVerifier, input.currentVerifier);
+  if (!ok) {
+    throw new HttpError(HTTP_STATUS.UNAUTHORIZED, MESSAGES.MASTER_VERIFY_FAILED);
+  }
+
+  // The client must include every item it's responsible for. We check the
+  // item list matches the server's view to refuse partial rotations that
+  // would leave items decryptable only with the old key.
+  const owned = await prisma.vaultItem.findMany({
+    where: { userId },
+    select: { id: true },
+  });
+  const serverIds = new Set(owned.map((i) => i.id));
+  const clientIds = new Set(input.items.map((i) => i.id));
+  if (serverIds.size !== clientIds.size) {
+    throw new HttpError(
+      HTTP_STATUS.BAD_REQUEST,
+      "Item set mismatch — refresh and retry.",
+    );
+  }
+  for (const id of serverIds) {
+    if (!clientIds.has(id)) {
+      throw new HttpError(
+        HTTP_STATUS.BAD_REQUEST,
+        "Item set mismatch — refresh and retry.",
+      );
+    }
+  }
+
+  const newVerifierHash = await argon2.hash(input.newVerifier, {
+    type: argon2.argon2id,
+  });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        masterSalt: input.newSalt,
+        masterVerifier: newVerifierHash,
+        masterParams: input.newParams,
+        ...(input.keypair && {
+          sharingPrivateCipher: input.keypair.privateCipher,
+          sharingPrivateIv: input.keypair.privateIv,
+        }),
+      },
+    });
+
+    for (const it of input.items) {
+      await tx.vaultItem.update({
+        where: { id: it.id, userId },
+        data: {
+          cipherBlob: Buffer.from(it.cipherBlob, "base64"),
+          cipherIv: Buffer.from(it.cipherIv, "base64"),
+        },
+      });
+    }
+  });
 }
 
 export async function getCurrentUser(userId: string): Promise<SignInResult["user"]> {

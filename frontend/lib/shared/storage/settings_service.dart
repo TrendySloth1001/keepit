@@ -28,22 +28,27 @@ class AppSettings {
   const AppSettings({
     required this.autoLock,
     required this.rememberMasterKey,
+    required this.biometricLock,
   });
 
   final AutoLockOption autoLock;
   final bool rememberMasterKey;
+  final bool biometricLock;
 
   AppSettings copyWith({
     AutoLockOption? autoLock,
     bool? rememberMasterKey,
+    bool? biometricLock,
   }) => AppSettings(
     autoLock: autoLock ?? this.autoLock,
     rememberMasterKey: rememberMasterKey ?? this.rememberMasterKey,
+    biometricLock: biometricLock ?? this.biometricLock,
   );
 
   static const defaults = AppSettings(
     autoLock: AutoLockOption.threeMinutes,
     rememberMasterKey: false,
+    biometricLock: false,
   );
 }
 
@@ -58,14 +63,17 @@ class SettingsService {
 
   static const _kAutoLock = 'settings_auto_lock';
   static const _kRememberKey = 'settings_remember_key';
+  static const _kBiometric = 'settings_biometric_lock';
   static const _kMasterKey = 'master_key_b64';
 
   Future<AppSettings> read() async {
     final autoLockKey = await _storage.read(key: _kAutoLock);
     final remember = await _storage.read(key: _kRememberKey);
+    final biometric = await _storage.read(key: _kBiometric);
     return AppSettings(
       autoLock: AutoLockOption.fromKey(autoLockKey),
       rememberMasterKey: remember == 'true',
+      biometricLock: biometric == 'true',
     );
   }
 
@@ -74,6 +82,9 @@ class SettingsService {
 
   Future<void> writeRememberMasterKey(bool value) =>
       _storage.write(key: _kRememberKey, value: value ? 'true' : 'false');
+
+  Future<void> writeBiometricLock(bool value) =>
+      _storage.write(key: _kBiometric, value: value ? 'true' : 'false');
 
   Future<Uint8List?> readMasterKey() async {
     final b64 = await _storage.read(key: _kMasterKey);

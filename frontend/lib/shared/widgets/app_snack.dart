@@ -14,7 +14,7 @@ void showAppSnack(BuildContext context, String message, {AppSnackKind kind = App
   ScaffoldMessenger.of(context).hideCurrentSnackBar();
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
-      backgroundColor: AppTheme.ink,
+      backgroundColor: AppTheme.fg,
       content: Text(message, style: TextStyle(color: AppTheme.bg, fontSize: AppType.body)),
       shape: RoundedRectangleBorder(
         borderRadius: AppRadius.brMd,

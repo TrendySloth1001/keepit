@@ -6,6 +6,7 @@ import { HTTP_STATUS } from "./constants/http-status";
 import { errorHandler, notFoundHandler } from "./shared/error-handler";
 import { authRouter } from "./features/auth/auth.route";
 import { privacyPolicyRouter } from "./features/privacy-policy/privacy-policy.route";
+import { shareRouter } from "./features/share/share.route";
 import { vaultRouter } from "./features/vault/vault.route";
 import { rateLimitMiddleware } from "./shared/rate-limit";
 
@@ -27,6 +28,7 @@ app.get("/health", (_req, res) => {
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/privacy-policy", privacyPolicyRouter);
 app.use("/api/v1/vault", vaultRouter);
+app.use("/api/v1/shares", shareRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

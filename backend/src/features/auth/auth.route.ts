@@ -6,11 +6,13 @@ import {
   initMaster,
   logout,
   me,
+  rotateMaster,
   verifyMaster,
 } from "./auth.controller";
 import {
   googleSignInSchema,
   masterInitSchema,
+  masterRotateSchema,
   masterVerifySchema,
 } from "./auth.schema";
 
@@ -21,3 +23,9 @@ authRouter.get("/me", requireAuth, me);
 authRouter.post("/logout", requireAuth, logout);
 authRouter.post("/master/init", requireAuth, validate(masterInitSchema), initMaster);
 authRouter.post("/master/verify", requireAuth, validate(masterVerifySchema), verifyMaster);
+authRouter.post(
+  "/master/rotate",
+  requireAuth,
+  validate(masterRotateSchema),
+  rotateMaster,
+);

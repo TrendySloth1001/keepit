@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../app/theme/app_theme.dart';
-import '../../app/theme/sketch.dart';
 import '../../app/theme/tokens.dart';
+import '../../shared/auth/biometric_service.dart';
 import '../../shared/storage/settings_service.dart';
-import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_snack.dart';
-import '../../shared/widgets/confirm_dialog.dart';
 import '../../shared/widgets/keepit_app_bar.dart';
+import '../../shared/widgets/settings_tile.dart';
 import '../auth/presentation/auth_notifier.dart';
 import 'settings_notifier.dart';
 
@@ -22,452 +21,314 @@ class SettingsPage extends ConsumerWidget {
     final user = ref.watch(authProvider).user;
 
     return Scaffold(
-      appBar: KeepItAppBar(title: 'Settings'),
+      backgroundColor: AppTheme.bg,
+      appBar: const KeepItAppBar(title: 'Settings'),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.lg),
           children: [
-            if (user != null) ...[
-              _SectionHeader('Account'),
-              _Card(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user.name,
-                      style: GoogleFonts.patrickHand(
-                        color: AppTheme.fg,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      user.email,
-                      style: const TextStyle(
-                        color: AppTheme.muted,
-                        fontSize: AppType.caption,
-                      ),
-                    ),
-                  ],
-                ),
+            if (user != null)
+              _ProfileSummary(
+                name: user.name,
+                email: user.email,
+                avatarUrl: user.avatarUrl,
+                onTap: () => context.push('/vault/account'),
               ),
-              const SizedBox(height: AppSpacing.xl),
+            const SectionLabel(text: 'Account'),
+            SettingsTile(
+              icon: Icons.person_outline,
+              title: 'Profile & subscription',
+              subtitle: 'Plan, member info, sign out',
+              onTap: () => context.push('/vault/account'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            SettingsTile(
+              icon: Icons.lock_reset_outlined,
+              title: 'Change Master Password',
+              subtitle: 'Re-encrypts your vault locally',
+              onTap: () => context.push('/vault/account/master-password'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            SettingsTile(
+              icon: Icons.privacy_tip_outlined,
+              title: 'Privacy Settings',
+              subtitle: 'Data, telemetry, account deletion',
+              onTap: () => context.push('/vault/account/privacy'),
+            ),
 
-              _SectionHeader('Privacy policy'),
-              _Card(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: 44,
-                          height: 44,
-                          child: CustomPaint(
-                            size: Size.infinite,
-                            painter: _SketchBadgePainter(
-                              accepted: user.policyAcceptedCurrent,
-                            ),
-                            child: Center(
-                              child: Icon(
-                                user.policyAcceptedCurrent
-                                    ? Icons.verified
-                                    : Icons.error_outline,
-                                color: user.policyAcceptedCurrent
-                                    ? AppTheme.onPrimary
-                                    : AppTheme.fg,
-                                size: AppIconSize.md,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                user.policyAcceptedCurrent
-                                    ? 'Privacy policy accepted'
-                                    : 'Privacy policy not yet accepted',
-                                style: GoogleFonts.patrickHand(
-                                  color: AppTheme.fg,
-                                  fontSize: AppType.subtitle,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                user.policyAcceptedCurrent
-                                    ? 'The current policy version has been accepted for this account.'
-                                    : 'The vault stays blocked until you accept the latest policy version.',
-                                style: const TextStyle(
-                                  color: AppTheme.muted,
-                                  fontSize: AppType.caption,
-                                  height: 1.4,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    _DetailRow(
-                      label: 'Current version',
-                      value: user.currentPolicyVersion,
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    _DetailRow(
-                      label: 'Accepted version',
-                      value: user.policyAcceptedVersion ?? 'Not accepted yet',
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    _DetailRow(
-                      label: 'Accepted at',
-                      value: user.policyAcceptedAt == null
-                          ? 'Pending'
-                          : _formatDateTime(user.policyAcceptedAt!),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-            ],
-
-            _SectionHeader('Auto-lock'),
-            _Card(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Lock the vault after this much idle time. '
-                    'In-app inactivity and time spent in the background both count.',
-                    style: TextStyle(
-                      color: AppTheme.fg,
-                      fontSize: AppType.caption,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  for (final option in AutoLockOption.values)
-                    _RadioRow(
-                      label: option.label,
-                      selected: settings.autoLock == option,
-                      onTap: () => ref
-                          .read(settingsProvider.notifier)
-                          .setAutoLock(option),
-                    ),
-                ],
+            const SectionLabel(text: 'Security'),
+            SettingsTile(
+              icon: Icons.fingerprint,
+              title: 'Biometric Lock',
+              subtitle: settings.biometricLock
+                  ? 'Unlock with biometrics — no master password'
+                  : 'Master password required',
+              trailing: Switch(
+                value: settings.biometricLock,
+                onChanged: (v) => _toggleBiometric(context, ref, v),
               ),
             ),
-            const SizedBox(height: AppSpacing.xl),
-
-            _SectionHeader('Master password'),
-            _Card(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Skip the master password prompt by storing the '
-                    'derived key in this device’s OS-encrypted secure '
-                    'storage (Android Keystore / iOS Keychain). The server '
-                    'still never sees the key.',
-                    style: TextStyle(
-                      color: AppTheme.fg,
-                      fontSize: AppType.caption,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  const Text(
-                    'Trade-off: anyone with access to your unlocked phone '
-                    'gains access to your vault.',
-                    style: TextStyle(
-                      color: AppTheme.warning,
-                      fontSize: AppType.micro,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    activeThumbColor: AppTheme.fg,
-                    activeTrackColor: AppTheme.primary,
-                    title: Text(
-                      'Remember on this device',
-                      style: GoogleFonts.patrickHand(
-                        color: AppTheme.fg,
-                        fontSize: AppType.body,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    value: settings.rememberMasterKey,
-                    onChanged: (v) => _toggleRemember(context, ref, v),
-                  ),
-                ],
-              ),
+            const SizedBox(height: AppSpacing.sm),
+            SettingsTile(
+              icon: Icons.timer_outlined,
+              title: 'Auto-lock',
+              subtitle: settings.autoLock.label,
+              onTap: () => _pickAutoLock(context, ref, settings.autoLock),
             ),
-            const SizedBox(height: AppSpacing.xl),
-
-            _SectionHeader('Session'),
-            AppButton(
-              label: 'Sign out',
-              icon: Icons.logout,
-              variant: AppButtonVariant.danger,
-              onPressed: () => _signOut(context, ref),
+            const SizedBox(height: AppSpacing.sm),
+            SettingsTile(
+              icon: Icons.shield_outlined,
+              title: 'Two-Factor Auth',
+              subtitle: 'Authenticator app · coming soon',
+              onTap: () => _comingSoon(context, 'Two-factor auth'),
             ),
+
+            const SectionLabel(text: 'Sharing & Backup'),
+            SettingsTile(
+              icon: Icons.group_outlined,
+              title: 'Shared with me',
+              subtitle: 'View items others shared with you',
+              onTap: () => context.push('/vault/shared'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            SettingsTile(
+              icon: Icons.download_outlined,
+              title: 'Export Data',
+              subtitle: 'Download a decrypted JSON backup',
+              onTap: () => context.push('/vault/account/export'),
+            ),
+
+            const SectionLabel(text: 'Notifications'),
+            SettingsTile(
+              icon: Icons.notifications_outlined,
+              title: 'Security alerts',
+              subtitle: 'Login notifications · coming soon',
+              onTap: () => _comingSoon(context, 'Notifications'),
+            ),
+
+            const SectionLabel(text: 'Support'),
+            SettingsTile(
+              icon: Icons.help_outline,
+              title: 'Help & Support',
+              subtitle: 'Guides, FAQs, contact us',
+              onTap: () => context.push('/vault/help'),
+            ),
+            const SizedBox(height: AppSpacing.huge),
           ],
         ),
       ),
     );
   }
 
-  Future<void> _toggleRemember(
+  Future<void> _toggleBiometric(
     BuildContext context,
     WidgetRef ref,
-    bool value,
+    bool desired,
   ) async {
-    final notifier = ref.read(settingsProvider.notifier);
-    final auth = ref.read(authProvider.notifier);
-
-    if (value) {
-      final ok = await showConfirmDialog(
-        context,
-        title: 'Remember master password?',
-        message:
-            'Your master key will be stored on this device. You will not be '
-            'asked for the master password until you sign out.',
-        confirmLabel: 'Enable',
+    if (desired) {
+      final supported = await BiometricService.instance.isSupported();
+      if (!context.mounted) return;
+      if (!supported) {
+        showAppSnack(
+          context,
+          'No biometrics enrolled on this device',
+          kind: AppSnackKind.error,
+        );
+        return;
+      }
+      final ok = await BiometricService.instance.authenticate(
+        reason: 'Confirm to enable biometric unlock',
       );
-      if (!ok) return;
-      await notifier.setRememberMasterKey(true);
-      await auth.persistCurrentKey();
-      if (context.mounted) {
+      if (!context.mounted) return;
+      if (!ok) {
         showAppSnack(
           context,
-          'Master password remembered',
-          kind: AppSnackKind.success,
+          'Biometric verification failed',
+          kind: AppSnackKind.error,
         );
+        return;
       }
+      // Vault must be unlocked so we have a master key to persist.
+      final masterKey = ref.read(authProvider.notifier).masterKey;
+      if (masterKey == null) {
+        showAppSnack(
+          context,
+          'Unlock the vault first',
+          kind: AppSnackKind.error,
+        );
+        return;
+      }
+      await ref.read(settingsProvider.notifier).setBiometricLock(true);
+      await SettingsService.instance.writeMasterKey(masterKey);
+      if (!context.mounted) return;
+      showAppSnack(
+        context,
+        'Biometric lock enabled',
+        kind: AppSnackKind.success,
+      );
     } else {
-      await notifier.setRememberMasterKey(false);
-      if (context.mounted) {
-        showAppSnack(
-          context,
-          'Stored master key cleared',
-          kind: AppSnackKind.info,
-        );
-      }
+      await ref.read(settingsProvider.notifier).setBiometricLock(false);
+      if (!context.mounted) return;
+      showAppSnack(context, 'Biometric lock disabled');
     }
   }
 
-  Future<void> _signOut(BuildContext context, WidgetRef ref) async {
-    final ok = await showConfirmDialog(
-      context,
-      title: 'Sign out?',
-      message:
-          'You will need your Google account and master password to sign back '
-          'in. Encrypted items remain in the cloud.',
-      confirmLabel: 'Sign out',
-      destructive: true,
-    );
-    if (!ok) return;
-    await ref.read(authProvider.notifier).logout();
-  }
-
-  String _formatDateTime(DateTime dateTime) {
-    final date =
-        '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')}';
-    final time =
-        '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
-    return '$date $time';
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(
-        left: AppSpacing.xs,
-        bottom: AppSpacing.sm,
-      ),
-      child: Text(
-        text.toUpperCase(),
-        style: GoogleFonts.patrickHand(
-          color: AppTheme.muted,
-          fontSize: AppType.micro,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 1.4,
+  Future<void> _pickAutoLock(
+    BuildContext context,
+    WidgetRef ref,
+    AutoLockOption current,
+  ) async {
+    final option = await showModalBottomSheet<AutoLockOption>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(bottom: AppSpacing.sm),
+                child: Text(
+                  'Auto-lock vault',
+                  style: TextStyle(
+                    color: AppTheme.fg,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                  ),
+                ),
+              ),
+              for (final o in AutoLockOption.values)
+                ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                  title: Text(o.label),
+                  trailing: o == current
+                      ? const Icon(Icons.check, color: AppTheme.primary)
+                      : null,
+                  onTap: () => Navigator.pop(ctx, o),
+                ),
+            ],
+          ),
         ),
       ),
     );
+    if (option != null) {
+      await ref.read(settingsProvider.notifier).setAutoLock(option);
+    }
   }
-}
 
-class _Card extends StatelessWidget {
-  const _Card({required this.child});
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return SketchBox(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      radius: 18,
-      fill: AppTheme.surface,
-      seed: identityHashCode(child),
-      child: child,
+  void _comingSoon(BuildContext context, String label) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label is coming soon')),
     );
   }
 }
 
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 130,
-          child: Text(
-            label.toUpperCase(),
-            style: GoogleFonts.patrickHand(
-              color: AppTheme.muted,
-              fontSize: AppType.micro,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.2,
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: Text(
-            value,
-            style: GoogleFonts.patrickHand(
-              color: AppTheme.fg,
-              fontSize: AppType.body,
-              fontWeight: label == 'Accepted at'
-                  ? FontWeight.w600
-                  : FontWeight.w800,
-              fontStyle: label == 'Accepted at' && value != 'Pending'
-                  ? FontStyle.italic
-                  : FontStyle.normal,
-              height: 1.4,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _RadioRow extends StatelessWidget {
-  const _RadioRow({
-    required this.label,
-    required this.selected,
+class _ProfileSummary extends StatelessWidget {
+  const _ProfileSummary({
+    required this.name,
+    required this.email,
+    required this.avatarUrl,
     required this.onTap,
   });
 
-  final String label;
-  final bool selected;
+  final String name;
+  final String email;
+  final String? avatarUrl;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: AppRadius.brSm,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 22,
-              height: 22,
-              child: CustomPaint(
-                size: Size.infinite,
-                painter: _RadioPainter(
-                  selected: selected,
-                  seed: label.hashCode,
+    final initial = name.isEmpty ? '?' : name[0].toUpperCase();
+    return Material(
+      color: AppTheme.surface,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: AppTheme.hairline),
+          ),
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: AppTheme.primarySoft,
+                backgroundImage: (avatarUrl != null && avatarUrl!.isNotEmpty)
+                    ? NetworkImage(avatarUrl!)
+                    : null,
+                child: (avatarUrl == null || avatarUrl!.isEmpty)
+                    ? Text(
+                        initial,
+                        style: const TextStyle(
+                          color: AppTheme.primaryDark,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 20,
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppTheme.fg,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      email,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppTheme.muted,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primarySoft,
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                      ),
+                      child: const Text(
+                        'Free Plan',
+                        style: TextStyle(
+                          color: AppTheme.primaryDark,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Text(
-              label,
-              style: GoogleFonts.patrickHand(
-                color: AppTheme.fg,
-                fontSize: AppType.body,
-                fontWeight: FontWeight.w700,
+              const Icon(
+                Icons.chevron_right,
+                color: AppTheme.muted,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
-}
-
-class _RadioPainter extends CustomPainter {
-  _RadioPainter({required this.selected, required this.seed});
-  final bool selected;
-  final int seed;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final border = RoughCircleBorder(
-        color: AppTheme.fg, strokeWidth: 1.4, seed: seed);
-    border.paint(canvas, rect);
-    if (selected) {
-      final inner = rect.deflate(5);
-      final fill = SketchPaint.roughRRect(inner, inner.width / 2,
-          seed: seed + 1, jitter: 0.6);
-      canvas.drawPath(
-        fill,
-        Paint()..color = AppTheme.fg..style = PaintingStyle.fill,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_RadioPainter old) =>
-      old.selected != selected || old.seed != seed;
-}
-
-class _SketchBadgePainter extends CustomPainter {
-  _SketchBadgePainter({required this.accepted});
-  final bool accepted;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    if (accepted) {
-      final path = const RoughCircleBorder(seed: 51).getOuterPath(rect);
-      canvas.drawPath(
-        path,
-        Paint()..color = AppTheme.primary..style = PaintingStyle.fill,
-      );
-      SketchPaint.hatch(canvas, path,
-          color: AppTheme.onPrimary.withValues(alpha: 0.20),
-          spacing: 4,
-          seed: 52);
-    }
-    const RoughCircleBorder(color: AppTheme.fg, strokeWidth: 1.5, seed: 51)
-        .paint(canvas, rect);
-  }
-
-  @override
-  bool shouldRepaint(_SketchBadgePainter old) => old.accepted != accepted;
 }

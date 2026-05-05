@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../shared/auth/biometric_service.dart';
 import '../../../shared/crypto/vault_crypto.dart';
 import '../../../shared/network/api_error.dart';
 import '../../../shared/network/api_client.dart';
@@ -63,9 +64,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> _bootstrap() async {
     final settings = await SettingsService.instance.read();
-    final rememberedKey = settings.rememberMasterKey
-        ? await SettingsService.instance.readMasterKey()
-        : null;
+    // When biometric lock is enabled the user must explicitly authenticate
+    // each session, so we never auto-unlock — even if a key is on disk.
+    final rememberedKey =
+        (settings.rememberMasterKey && !settings.biometricLock)
+            ? await SettingsService.instance.readMasterKey()
+            : null;
 
     try {
       final token = await SecureStore.instance.readSessionToken();
@@ -146,9 +150,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(isBusy: true, errorMessage: null);
     try {
       final settings = await SettingsService.instance.read();
-      final rememberedKey = settings.rememberMasterKey
-          ? await SettingsService.instance.readMasterKey()
-          : null;
+      final rememberedKey =
+          (settings.rememberMasterKey && !settings.biometricLock)
+              ? await SettingsService.instance.readMasterKey()
+              : null;
       final result = await AuthRepository.instance.signInWithGoogle();
       await SecureStore.instance.writeSessionToken(result.token);
       final nextStage = _resolvePostAuthStage(
@@ -199,6 +204,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  /// Attempts to unlock the vault using the OS biometric prompt. The actual
+  /// master key was saved to encrypted device storage when biometric lock was
+  /// turned on; this method just gates that load behind a successful prompt.
+  Future<bool> unlockWithBiometric() async {
+    final settings = await SettingsService.instance.read();
+    if (!settings.biometricLock) return false;
+    final ok = await BiometricService.instance.authenticate();
+    if (!ok) return false;
+    final stored = await SettingsService.instance.readMasterKey();
+    if (stored == null) return false;
+    _masterKey = stored;
+    final user = state.user;
+    if (user != null) {
+      state = AuthState(stage: AuthStage.unlocked, user: user);
+    }
+    return true;
+  }
+
   Future<void> unlockMaster(String password) async {
     state = state.copyWith(isBusy: true, errorMessage: null);
     try {
@@ -245,9 +268,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
 
       final settings = await SettingsService.instance.read();
-      final rememberedKey = settings.rememberMasterKey
-          ? await SettingsService.instance.readMasterKey()
-          : null;
+      final rememberedKey =
+          (settings.rememberMasterKey && !settings.biometricLock)
+              ? await SettingsService.instance.readMasterKey()
+              : null;
       if (rememberedKey != null) {
         _masterKey = rememberedKey;
       }
@@ -266,10 +290,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// OS-encrypted storage so the unlock screen never appears.
   Future<void> lock() async {
     _masterKey = null;
-    final stored = await SettingsService.instance.readMasterKey();
-    if (stored != null) {
-      _masterKey = stored;
-      return;
+    final settings = await SettingsService.instance.read();
+    // Biometric lock always re-prompts; never silently restore.
+    if (!settings.biometricLock) {
+      final stored = await SettingsService.instance.readMasterKey();
+      if (stored != null) {
+        _masterKey = stored;
+        return;
+      }
     }
     if (state.stage == AuthStage.unlocked) {
       state = state.copyWith(stage: AuthStage.locked);
@@ -289,10 +317,29 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// Called from settings when toggling remember-master-key on while unlocked.
   Future<void> persistCurrentKey() => _persistKeyIfRemembered();
 
+  /// Swaps the in-memory master key after a successful server-side rotation
+  /// and updates the cached UserProfile so subsequent unlocks use the new
+  /// salt/params. Caller is responsible for re-encrypting items first.
+  Future<void> adoptRotatedMasterKey({
+    required Uint8List key,
+    required String saltBase64,
+    required KdfParams params,
+  }) async {
+    _masterKey = key;
+    final user = state.user?.copyWith(
+      masterSalt: saltBase64,
+      masterParams: params,
+    );
+    if (user != null) {
+      await SecureStore.instance.writeCachedUser(jsonEncode(user.toJson()));
+      state = state.copyWith(user: user);
+    }
+  }
+
   Future<void> _persistKeyIfRemembered() async {
     if (_masterKey == null) return;
     final settings = await SettingsService.instance.read();
-    if (settings.rememberMasterKey) {
+    if (settings.rememberMasterKey || settings.biometricLock) {
       await SettingsService.instance.writeMasterKey(_masterKey!);
     }
   }

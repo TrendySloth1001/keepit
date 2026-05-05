@@ -33,8 +33,8 @@ class InlineMessage extends StatelessWidget {
         vertical: AppSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: AppTheme.black,
-        border: Border.all(color: _color),
+        color: _color.withValues(alpha: 0.08),
+        border: Border.all(color: _color.withValues(alpha: 0.4)),
         borderRadius: AppRadius.brMd,
       ),
       child: Row(

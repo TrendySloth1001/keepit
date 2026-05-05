@@ -6,9 +6,9 @@ import '../../../../app/theme/app_theme.dart';
 import '../../../../app/theme/tokens.dart';
 import '../../../../shared/widgets/empty_state.dart';
 import '../../../../shared/widgets/inline_message.dart';
-import '../../../../shared/widgets/keepit_app_bar.dart';
 import '../../../../shared/widgets/shimmer_box.dart';
 import '../../../auth/presentation/auth_notifier.dart';
+import '../../../share/presentation/share_notifier.dart';
 import '../../data/vault_models.dart';
 import '../storage_notifier.dart';
 import '../vault_notifier.dart';
@@ -35,6 +35,10 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(vaultProvider.notifier).refresh();
       ref.read(storageProvider.notifier).refresh();
+      // Lazily publish the user's sharing keypair so they can receive shares
+      // from this point on. Failure is non-fatal — they just can't share yet.
+      ref.read(shareProvider.notifier).ensureKeypair();
+      ref.read(shareProvider.notifier).refresh();
     });
     _scrollController.addListener(_onScroll);
   }
@@ -78,13 +82,9 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
   void _onTap(VaultItem item) {
     switch (item.type) {
       case VaultItemType.password:
-        context.push('/vault/edit/password', extra: item);
-        break;
       case VaultItemType.note:
-        context.push('/vault/edit/note', extra: item);
-        break;
       case VaultItemType.key:
-        context.push('/vault/edit/key', extra: item);
+        context.push('/vault/view', extra: item);
         break;
       case VaultItemType.file:
       case VaultItemType.image:
@@ -93,140 +93,356 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
     }
   }
 
+  String _greeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(vaultProvider);
     final notifier = ref.read(vaultProvider.notifier);
     final user = ref.watch(authProvider).user;
+    final firstName = (user?.name ?? '').split(' ').first;
 
     return AutoLockScope(
       child: Scaffold(
-        appBar: KeepItAppBar(
-          title: user?.name ?? 'Vault',
-          actions: [
-            IconButton(
-              tooltip: 'Lock',
-              onPressed: () => ref.read(authProvider.notifier).lock(),
-              icon: const Icon(Icons.lock_outline),
-            ),
-            IconButton(
-              tooltip: 'Settings',
-              onPressed: () => context.push('/vault/settings'),
-              icon: const Icon(Icons.settings_outlined),
-            ),
-          ],
-        ),
-        floatingActionButton: FloatingActionButton(
+        backgroundColor: AppTheme.bg,
+        floatingActionButton: FloatingActionButton.extended(
           onPressed: _onAdd,
-          child: const Icon(Icons.add),
+          icon: const Icon(Icons.add),
+          label: const Text(
+            'Add',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
         ),
         body: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.sm,
-                  AppSpacing.lg,
-                  AppSpacing.sm,
-                ),
-                child: const StorageMeter(),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: notifier.setSearch,
-                  decoration: const InputDecoration(
-                    labelText: 'Search by title',
-                    prefixIcon: Icon(Icons.search),
+          child: RefreshIndicator(
+            color: AppTheme.primary,
+            backgroundColor: AppTheme.surface,
+            onRefresh: () async {
+              await notifier.refresh();
+              await ref.read(storageProvider.notifier).refresh();
+            },
+            child: CustomScrollView(
+              controller: _scrollController,
+              slivers: [
+                SliverToBoxAdapter(
+                  child: _Hero(
+                    greeting: _greeting(),
+                    firstName: firstName,
+                    avatarUrl: user?.avatarUrl,
+                    onLock: () => ref.read(authProvider.notifier).lock(),
+                    onSettings: () => context.push('/vault/settings'),
+                    searchController: _searchController,
+                    onSearch: notifier.setSearch,
                   ),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              TypeFilter(
-                value: state.typeFilter,
-                onChanged: notifier.setTypeFilter,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              if (state.errorMessage != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg,
-                    vertical: AppSpacing.sm,
-                  ),
-                  child: InlineMessage(
-                    message: state.errorMessage!,
-                    kind: InlineMessageKind.error,
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      AppSpacing.md,
+                      AppSpacing.lg,
+                      AppSpacing.md,
+                    ),
+                    child: StorageMeter(
+                      onUpgrade: () => ScaffoldMessenger.of(context)
+                          .showSnackBar(
+                            const SnackBar(
+                              content: Text('Premium is coming soon'),
+                            ),
+                          ),
+                    ),
                   ),
                 ),
-              Expanded(child: _buildBody(state, notifier)),
-            ],
+                SliverToBoxAdapter(
+                  child: TypeFilter(
+                    selected: state.typeFilter,
+                    onChanged: notifier.setTypeFilter,
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
+                if (state.errorMessage != null)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: AppSpacing.sm,
+                      ),
+                      child: InlineMessage(
+                        message: state.errorMessage!,
+                        kind: InlineMessageKind.error,
+                      ),
+                    ),
+                  ),
+                _SectionHeader(
+                  title: state.typeFilter == null
+                      ? 'All items'
+                      : 'Filtered items',
+                  subtitle: '${state.visibleItems.length} entries',
+                ),
+                if (state.isLoading)
+                  const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: ShimmerCentered(),
+                  )
+                else if (state.visibleItems.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.huge),
+                      child: EmptyState(
+                        icon: Icons.lock_outline,
+                        title: state.search.isEmpty && state.typeFilter == null
+                            ? 'Your vault is empty'
+                            : 'No matching items',
+                        message: state.search.isEmpty && state.typeFilter == null
+                            ? 'Tap + to add your first encrypted item.'
+                            : 'Try a different search or filter.',
+                      ),
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      AppSpacing.sm,
+                      AppSpacing.lg,
+                      96,
+                    ),
+                    sliver: SliverList.separated(
+                      itemCount:
+                          state.visibleItems.length + (state.isPaging ? 1 : 0),
+                      separatorBuilder: (_, _) =>
+                          const SizedBox(height: AppSpacing.sm),
+                      itemBuilder: (_, i) {
+                        final items = state.visibleItems;
+                        if (i >= items.length) {
+                          return const Padding(
+                            padding: EdgeInsets.all(AppSpacing.lg),
+                            child: Center(
+                              child: ShimmerBox(
+                                width: 120,
+                                height: 12,
+                                borderRadius: 6,
+                              ),
+                            ),
+                          );
+                        }
+                        final item = items[i];
+                        return VaultItemTile(
+                          item: item,
+                          onTap: () => _onTap(item),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildBody(VaultListState state, VaultNotifier notifier) {
-    if (state.isLoading) {
-      return const ShimmerCentered();
-    }
-    final items = state.visibleItems;
-    if (items.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: () async {
-          await notifier.refresh();
-          await ref.read(storageProvider.notifier).refresh();
-        },
-        color: AppTheme.primary,
-        backgroundColor: AppTheme.surface,
-        child: ListView(
+class _Hero extends StatelessWidget {
+  const _Hero({
+    required this.greeting,
+    required this.firstName,
+    required this.avatarUrl,
+    required this.onLock,
+    required this.onSettings,
+    required this.searchController,
+    required this.onSearch,
+  });
+
+  final String greeting;
+  final String firstName;
+  final String? avatarUrl;
+  final VoidCallback onLock;
+  final VoidCallback onSettings;
+  final TextEditingController searchController;
+  final ValueChanged<String> onSearch;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppTheme.heroGreen,
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(28),
+          bottomRight: Radius.circular(28),
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.xl,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppTheme.primary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.shield,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              const Text(
+                'KeepIt',
+                style: TextStyle(
+                  color: AppTheme.fg,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                tooltip: 'Lock',
+                onPressed: onLock,
+                icon: const Icon(Icons.lock_outline, color: AppTheme.fg),
+              ),
+              GestureDetector(
+                onTap: onSettings,
+                child: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: AppTheme.primary,
+                  backgroundImage: (avatarUrl != null && avatarUrl!.isNotEmpty)
+                      ? NetworkImage(avatarUrl!)
+                      : null,
+                  child: (avatarUrl == null || avatarUrl!.isEmpty)
+                      ? Text(
+                          firstName.isEmpty ? '?' : firstName[0].toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        )
+                      : null,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            '$greeting${firstName.isEmpty ? '' : ', $firstName'}!',
+            style: const TextStyle(
+              color: AppTheme.fg,
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Your secrets are encrypted end-to-end on this device.',
+            style: TextStyle(color: AppTheme.muted, fontSize: 13),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: searchController,
+              onChanged: onSearch,
+              decoration: InputDecoration(
+                hintText: 'Search your vault…',
+                prefixIcon: const Padding(
+                  padding: EdgeInsets.only(left: 14, right: 8),
+                  child: Icon(Icons.search, color: AppTheme.muted),
+                ),
+                prefixIconConstraints: const BoxConstraints(
+                  minWidth: 0,
+                  minHeight: 0,
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: 14,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  borderSide: const BorderSide(
+                    color: AppTheme.primary,
+                    width: 1.4,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title, required this.subtitle});
+  final String title;
+  final String subtitle;
+  @override
+  Widget build(BuildContext context) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.lg,
+          AppSpacing.sm,
+        ),
+        child: Row(
           children: [
-            SizedBox(height: MediaQuery.of(context).size.height * 0.1),
-            EmptyState(
-              icon: Icons.lock_outline,
-              title: state.search.isEmpty && state.typeFilter == null
-                  ? 'Your vault is empty'
-                  : 'No matching items',
-              message: state.search.isEmpty && state.typeFilter == null
-                  ? 'Tap + to add your first encrypted item.'
-                  : 'Try a different search or filter.',
+            Text(
+              title,
+              style: const TextStyle(
+                color: AppTheme.fg,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              subtitle,
+              style: const TextStyle(color: AppTheme.muted, fontSize: 12),
             ),
           ],
         ),
-      );
-    }
-    return RefreshIndicator(
-      onRefresh: () async {
-        await notifier.refresh();
-        await ref.read(storageProvider.notifier).refresh();
-      },
-      color: AppTheme.white,
-      backgroundColor: AppTheme.black,
-      child: ListView.separated(
-        controller: _scrollController,
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg,
-          AppSpacing.sm,
-          AppSpacing.lg,
-          AppSpacing.huge,
-        ),
-        itemCount: items.length + (state.isPaging ? 1 : 0),
-        separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
-        itemBuilder: (_, i) {
-          if (i >= items.length) {
-            return const Padding(
-              padding: EdgeInsets.all(AppSpacing.lg),
-              child: Center(
-                child: ShimmerBox(width: 120, height: 12, borderRadius: 6),
-              ),
-            );
-          }
-          final item = items[i];
-          return VaultItemTile(item: item, onTap: () => _onTap(item));
-        },
       ),
     );
   }

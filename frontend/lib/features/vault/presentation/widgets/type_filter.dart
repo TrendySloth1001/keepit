@@ -1,78 +1,119 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/theme/app_theme.dart';
-import '../../../../app/theme/sketch.dart';
 import '../../../../app/theme/tokens.dart';
 import '../../data/vault_models.dart';
 
 class TypeFilter extends StatelessWidget {
-  const TypeFilter({super.key, required this.value, required this.onChanged});
+  const TypeFilter({
+    super.key,
+    required this.selected,
+    required this.onChanged,
+  });
 
-  final VaultItemType? value;
+  final VaultItemType? selected;
   final ValueChanged<VaultItemType?> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final entries = <(VaultItemType?, String, IconData)>[
-      (null, 'All', Icons.apps_outlined),
-      (VaultItemType.password, 'Passwords', Icons.password),
-      (VaultItemType.note, 'Notes', Icons.notes),
-      (VaultItemType.key, 'Keys', Icons.key),
-      (VaultItemType.image, 'Images', Icons.image_outlined),
-      (VaultItemType.file, 'Files', Icons.attach_file),
-    ];
-
     return SizedBox(
-      height: 48,
-      child: ListView.separated(
+      height: 40,
+      child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-        itemCount: entries.length,
-        separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
-        itemBuilder: (_, i) {
-          final (type, label, icon) = entries[i];
-          final selected = type == value;
-          // Alternating tilt so chips sit slightly out-of-square.
-          final tilt = (i.isEven ? 1 : -1) * 0.01;
-          return Transform.rotate(
-            angle: tilt,
-            child: InkWell(
-              onTap: () => onChanged(type),
-              borderRadius: AppRadius.brPill,
-              child: SketchBox(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.xs,
-                ),
-                radius: 999,
-                fill: selected ? AppTheme.primary : AppTheme.surface,
-                hatchColor:
-                    selected ? AppTheme.onPrimary.withValues(alpha: 0.20) : null,
-                hatchSpacing: 5,
-                seed: label.hashCode,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      icon,
-                      size: AppIconSize.sm,
-                      color: selected ? AppTheme.onPrimary : AppTheme.fg,
-                    ),
-                    const SizedBox(width: AppSpacing.xs),
-                    Text(
-                      label,
-                      style: TextStyle(
-                        color: selected ? AppTheme.onPrimary : AppTheme.fg,
-                        fontSize: AppType.body,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
+        children: [
+          _Chip(
+            icon: Icons.dashboard_outlined,
+            label: 'All',
+            selected: selected == null,
+            onTap: () => onChanged(null),
+          ),
+          ...VaultItemType.values.map(
+            (t) => Padding(
+              padding: const EdgeInsets.only(left: AppSpacing.sm),
+              child: _Chip(
+                icon: _iconFor(t),
+                label: _labelFor(t),
+                selected: selected == t,
+                onTap: () => onChanged(t),
               ),
             ),
-          );
-        },
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _labelFor(VaultItemType t) => switch (t) {
+        VaultItemType.password => 'Passwords',
+        VaultItemType.note => 'Notes',
+        VaultItemType.key => 'Keys',
+        VaultItemType.file => 'Files',
+        VaultItemType.image => 'Images',
+      };
+
+  IconData _iconFor(VaultItemType t) => switch (t) {
+        VaultItemType.password => Icons.password,
+        VaultItemType.note => Icons.sticky_note_2_outlined,
+        VaultItemType.key => Icons.vpn_key_outlined,
+        VaultItemType.file => Icons.description_outlined,
+        VaultItemType.image => Icons.image_outlined,
+      };
+}
+
+class _Chip extends StatelessWidget {
+  const _Chip({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: AppDurations.short,
+      curve: Curves.easeOut,
+      decoration: BoxDecoration(
+        color: selected ? AppTheme.ink : AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(
+          color: selected ? AppTheme.ink : AppTheme.hairline,
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: 6,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: selected ? AppTheme.primary : AppTheme.muted,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: selected ? AppTheme.white : AppTheme.fg,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

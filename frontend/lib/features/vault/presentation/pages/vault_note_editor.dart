@@ -9,6 +9,7 @@ import '../../../../shared/widgets/app_snack.dart';
 import '../../../../shared/widgets/confirm_dialog.dart';
 import '../../../../shared/widgets/inline_message.dart';
 import '../../../../shared/widgets/keepit_app_bar.dart';
+import '../../../../shared/widgets/section_card.dart';
 import '../../../../shared/widgets/shimmer_box.dart';
 import '../../data/vault_models.dart';
 import '../vault_notifier.dart';
@@ -71,9 +72,7 @@ class _VaultNoteEditorState extends ConsumerState<VaultNoteEditor> {
       _error = null;
     });
     try {
-      await ref
-          .read(vaultProvider.notifier)
-          .saveNote(
+      await ref.read(vaultProvider.notifier).saveNote(
             id: widget.existing?.id,
             title: _title.text.trim(),
             payload: NotePayload(body: _body.text),
@@ -83,11 +82,12 @@ class _VaultNoteEditorState extends ConsumerState<VaultNoteEditor> {
         Navigator.of(context).pop();
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _isSaving = false;
           _error = friendlyApiError(e);
         });
+      }
     }
   }
 
@@ -111,6 +111,7 @@ class _VaultNoteEditorState extends ConsumerState<VaultNoteEditor> {
   Widget build(BuildContext context) {
     final isEditing = widget.existing != null;
     return Scaffold(
+      backgroundColor: AppTheme.bg,
       appBar: KeepItAppBar(
         title: isEditing ? 'Edit note' : 'New note',
         actions: [
@@ -124,44 +125,77 @@ class _VaultNoteEditorState extends ConsumerState<VaultNoteEditor> {
       body: SafeArea(
         child: _isLoading
             ? const ShimmerCentered()
-            : Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (_error != null) ...[
-                      InlineMessage(
-                        message: _error!,
-                        kind: InlineMessageKind.error,
+            : Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        AppSpacing.md,
+                        AppSpacing.lg,
+                        AppSpacing.lg,
                       ),
-                      const SizedBox(height: AppSpacing.md),
-                    ],
-                    TextField(
-                      controller: _title,
-                      decoration: const InputDecoration(labelText: 'Title'),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Expanded(
-                      child: TextField(
-                        controller: _body,
-                        maxLines: null,
-                        expands: true,
-                        textAlignVertical: TextAlignVertical.top,
-                        decoration: const InputDecoration(
-                          labelText: 'Note (encrypted on device)',
-                          alignLabelWithHint: true,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (_error != null) ...[
+                            InlineMessage(
+                              message: _error!,
+                              kind: InlineMessageKind.error,
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                          ],
+                          SectionCard(
+                            title: 'NOTE',
+                            icon: Icons.sticky_note_2_outlined,
+                            child: Column(
+                              children: [
+                                TextField(
+                                  controller: _title,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Title',
+                                  ),
+                                ),
+                                const SizedBox(height: AppSpacing.md),
+                                TextField(
+                                  controller: _body,
+                                  maxLines: 14,
+                                  minLines: 8,
+                                  textAlignVertical: TextAlignVertical.top,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Body (encrypted on device)',
+                                    alignLabelWithHint: true,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 80),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.lg),
-                    AppButton(
-                      label: isEditing ? 'Save changes' : 'Save',
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppTheme.surface,
+                      border: const Border(
+                        top: BorderSide(color: AppTheme.hairline),
+                      ),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      AppSpacing.md,
+                      AppSpacing.lg,
+                      AppSpacing.lg,
+                    ),
+                    child: AppButton(
+                      label: isEditing ? 'Save changes' : 'Save securely',
                       icon: Icons.lock_outline,
                       isBusy: _isSaving,
                       onPressed: _save,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
       ),
     );

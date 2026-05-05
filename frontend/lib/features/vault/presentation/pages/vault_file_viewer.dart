@@ -15,6 +15,7 @@ import '../../../../shared/widgets/confirm_dialog.dart';
 import '../../../../shared/widgets/inline_message.dart';
 import '../../../../shared/widgets/keepit_app_bar.dart';
 import '../../../../shared/widgets/shimmer_box.dart';
+import '../../data/icon_catalog.dart';
 import '../../data/vault_models.dart';
 import '../storage_notifier.dart';
 import '../vault_notifier.dart';
@@ -31,6 +32,7 @@ class _VaultFileViewerState extends ConsumerState<VaultFileViewer> {
   Uint8List? _bytes;
   String? _filename;
   String? _mime;
+  String? _iconKey;
   bool _isLoading = true;
   String? _error;
 
@@ -50,6 +52,7 @@ class _VaultFileViewerState extends ConsumerState<VaultFileViewer> {
         _bytes = result.bytes;
         _filename = result.filename;
         _mime = result.mime;
+        _iconKey = result.iconKey;
         _isLoading = false;
       });
     } catch (e) {
@@ -156,6 +159,8 @@ class _VaultFileViewerState extends ConsumerState<VaultFileViewer> {
 
   @override
   Widget build(BuildContext context) {
+    final iconKey =
+        _iconKey ?? IconCatalog.guessFromTitle(widget.item.title).key;
     return Scaffold(
       appBar: KeepItAppBar(
         title: widget.item.title,
@@ -178,23 +183,42 @@ class _VaultFileViewerState extends ConsumerState<VaultFileViewer> {
                   children: [
                     _buildPreview(),
                     const SizedBox(height: AppSpacing.md),
-                    Text(
-                      _filename ?? 'file',
-                      style: const TextStyle(
-                        color: AppTheme.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      [
-                        if (widget.item.fileSize != null)
-                          formatBytes(widget.item.fileSize!),
-                        formatRelativeTime(widget.item.updatedAt),
-                      ].join(' · '),
-                      style: const TextStyle(
-                        color: AppTheme.white,
-                        fontSize: AppType.micro,
-                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        VaultIcon(
+                          iconKey: iconKey,
+                          size: 40,
+                          iconSize: 20,
+                          radius: 10,
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _filename ?? 'file',
+                                style: const TextStyle(
+                                  color: AppTheme.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                [
+                                  if (widget.item.fileSize != null)
+                                    formatBytes(widget.item.fileSize!),
+                                  formatRelativeTime(widget.item.updatedAt),
+                                ].join(' · '),
+                                style: const TextStyle(
+                                  color: AppTheme.white,
+                                  fontSize: AppType.micro,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     AppButton(

@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_theme.dart';
-import '../../app/theme/sketch.dart';
 import '../../app/theme/tokens.dart';
 
-enum AppButtonVariant { primary, secondary, danger }
+enum AppButtonVariant { primary, secondary, danger, accent }
 
-/// Standard CTA — replaced with the hand-drawn [SketchButton] look so
-/// every action across the app reads as a sketchbook UI element.
 class AppButton extends StatelessWidget {
   const AppButton({
     super.key,
@@ -28,29 +25,74 @@ class AppButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fill = switch (variant) {
-      AppButtonVariant.primary => AppTheme.primary,
-      AppButtonVariant.secondary => AppTheme.surface,
-      AppButtonVariant.danger => AppTheme.surface,
+    final (bg, fg, iconColor) = switch (variant) {
+      AppButtonVariant.primary => (
+          AppTheme.ink,
+          AppTheme.white,
+          AppTheme.primary,
+        ),
+      AppButtonVariant.accent => (
+          AppTheme.primary,
+          AppTheme.white,
+          AppTheme.white,
+        ),
+      AppButtonVariant.danger => (
+          AppTheme.error,
+          AppTheme.white,
+          AppTheme.white,
+        ),
+      AppButtonVariant.secondary => (
+          AppTheme.surface,
+          AppTheme.fg,
+          AppTheme.fg,
+        ),
     };
-    final fg = switch (variant) {
-      AppButtonVariant.primary => AppTheme.onPrimary,
-      AppButtonVariant.secondary => AppTheme.fg,
-      AppButtonVariant.danger => AppTheme.error,
-    };
-    final button = SizedBox(
+
+    if (variant == AppButtonVariant.secondary) {
+      return SizedBox(
+        height: AppLayout.buttonHeight,
+        width: fullWidth ? double.infinity : null,
+        child: OutlinedButton.icon(
+          onPressed: isBusy ? null : onPressed,
+          icon: isBusy
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : (icon != null
+                  ? Icon(icon, color: iconColor)
+                  : const SizedBox.shrink()),
+          label: Text(label),
+        ),
+      );
+    }
+
+    return SizedBox(
       height: AppLayout.buttonHeight,
       width: fullWidth ? double.infinity : null,
-      child: SketchButton(
-        label: label,
-        icon: icon,
-        onPressed: onPressed,
-        busy: isBusy,
-        fullWidth: fullWidth,
-        fill: fill,
-        foreground: fg,
+      child: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: bg,
+          foregroundColor: fg,
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+          ),
+        ),
+        onPressed: isBusy ? null : onPressed,
+        icon: isBusy
+            ? SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: fg),
+              )
+            : (icon != null
+                ? Icon(icon, color: iconColor, size: 18)
+                : const SizedBox.shrink()),
+        label: Text(label),
       ),
     );
-    return button;
   }
 }

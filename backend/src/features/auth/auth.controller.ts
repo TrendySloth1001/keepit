@@ -4,6 +4,7 @@ import { asyncHandler } from "../../shared/async-handler";
 import {
   getCurrentUser,
   initMasterPassword,
+  rotateMasterPassword,
   signInWithGoogle,
   signOut,
   verifyMasterPassword,
@@ -29,6 +30,11 @@ export const initMaster = asyncHandler(async (req: Request, res: Response) => {
 
 export const verifyMaster = asyncHandler(async (req: Request, res: Response) => {
   await verifyMasterPassword(req.auth!.userId, req.body);
+  res.status(HTTP_STATUS.NO_CONTENT).send();
+});
+
+export const rotateMaster = asyncHandler(async (req: Request, res: Response) => {
+  await rotateMasterPassword(req.auth!.userId, req.body);
   res.status(HTTP_STATUS.NO_CONTENT).send();
 });
 

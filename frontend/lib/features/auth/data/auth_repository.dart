@@ -79,6 +79,27 @@ class AuthRepository {
     );
   }
 
+  Future<void> rotateMaster({
+    required String currentVerifier,
+    required String newSalt,
+    required String newVerifier,
+    required KdfParams newParams,
+    required List<Map<String, String>> items,
+    Map<String, String>? keypair,
+  }) async {
+    await _dio.post(
+      ApiConstants.masterRotate,
+      data: {
+        'currentVerifier': currentVerifier,
+        'newSalt': newSalt,
+        'newVerifier': newVerifier,
+        'newParams': newParams.toJson(),
+        'items': items,
+        if (keypair != null) 'keypair': keypair,
+      },
+    );
+  }
+
   Future<void> logout() async {
     try {
       await _dio.post(ApiConstants.logout);

@@ -14,7 +14,7 @@ Future<bool> showConfirmDialog(
 }) async {
   final result = await showDialog<bool>(
     context: context,
-    barrierColor: AppTheme.ink.withValues(alpha: 0.4),
+    barrierColor: AppTheme.fg.withValues(alpha: 0.4),
     builder: (ctx) => AlertDialog(
       title: Text(title),
       content: Text(

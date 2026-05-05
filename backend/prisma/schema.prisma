@@ -25,6 +25,15 @@ model User {
   masterVerifier  String?
   masterParams    Json?
 
+  // X25519 sharing keypair. The public key is shared freely (used by other
+  // users to wrap a per-share DEK with `crypto_box_seal`). The private key
+  // is encrypted client-side with the master key and stored as a base64
+  // ciphertext + IV here so it can be restored on any device after unlock.
+  // Server never sees the plaintext private key.
+  sharingPublicKey       String?
+  sharingPrivateCipher   String?
+  sharingPrivateIv       String?
+
   quotaBytes      BigInt   @default(262144000)
   bytesUsed       BigInt   @default(0)
   policyAcceptedVersion String?
@@ -35,8 +44,48 @@ model User {
 
   sessions        Session[]
   vaultItems      VaultItem[]
+  sharesSent      VaultShare[] @relation("SharesSent")
+  sharesReceived  VaultShare[] @relation("SharesReceived")
 
   @@index([email])
+}
+
+/// An end-to-end-encrypted item share. The owner re-encrypts the item content
+/// with a fresh DEK, then wraps that DEK with the recipient's public key
+/// (`crypto_box_seal`). Server stores ciphertext + wrapped DEK and routes
+/// access by `recipientId`. No one but the recipient (whose private key is
+/// derived from their master password) can decrypt — even with the share id.
+model VaultShare {
+  id              String   @id @default(cuid())
+
+  ownerId         String
+  recipientId     String
+
+  // Mirrors VaultItem.type so recipient can render the right view without
+  // decrypting; this column is *not* sensitive.
+  type            VaultItemType
+  // Plaintext title shown in the recipient's "Shared with me" list. Owners
+  // are warned that titles are visible to the server (consistent with the
+  // existing item title column).
+  title           String
+
+  // The item payload encrypted with a per-share DEK.
+  cipherBlob      Bytes
+  cipherIv        Bytes
+  // The DEK itself, sealed with the recipient's public key (X25519 sealed
+  // box). Only the recipient can decrypt this.
+  wrappedKey      Bytes
+
+  permission      String   @default("view") // "view" | "edit" (edit reserved)
+
+  createdAt       DateTime @default(now())
+  revokedAt       DateTime?
+
+  owner           User     @relation("SharesSent", fields: [ownerId], references: [id], onDelete: Cascade)
+  recipient       User     @relation("SharesReceived", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, revokedAt, createdAt(sort: Desc)])
+  @@index([ownerId, createdAt(sort: Desc)])
 }
 
 model PrivacyPolicy {

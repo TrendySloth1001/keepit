@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../app/theme/app_theme.dart';
@@ -14,6 +15,7 @@ import '../../../../shared/widgets/app_snack.dart';
 import '../../../../shared/widgets/inline_message.dart';
 import '../../../../shared/widgets/keepit_app_bar.dart';
 import '../../data/vault_models.dart';
+import '../../data/icon_catalog.dart';
 import '../storage_notifier.dart';
 import '../vault_notifier.dart';
 
@@ -34,15 +36,40 @@ class _VaultUploaderPageState extends ConsumerState<VaultUploaderPage> {
   Uint8List? _bytes;
   String? _filename;
   String? _mime;
+  String? _iconKey;
   double _progress = 0;
   bool _isPicking = false;
   bool _isUploading = false;
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    _title.addListener(() {
+      if (_iconKey == null) setState(() {});
+    });
+  }
+
+  @override
   void dispose() {
     _title.dispose();
     super.dispose();
+  }
+
+  String get _effectiveIconKey =>
+      _iconKey ?? IconCatalog.guessFromTitle(_title.text).key;
+
+  String? get _persistedIconKey {
+    final key = _effectiveIconKey;
+    return key == 'generic' ? null : key;
+  }
+
+  Future<void> _pickIcon() async {
+    final picked = await context.push<String>(
+      '/vault/icon-picker',
+      extra: _effectiveIconKey,
+    );
+    if (picked != null) setState(() => _iconKey = picked);
   }
 
   Future<void> _pick() async {
@@ -117,6 +144,7 @@ class _VaultUploaderPageState extends ConsumerState<VaultUploaderPage> {
             bytes: _bytes!,
             mime: _mime!,
             originalFilename: _filename!,
+            iconKey: _persistedIconKey,
             onProgress: (p) {
               if (mounted) setState(() => _progress = p);
             },
@@ -154,6 +182,44 @@ class _VaultUploaderPageState extends ConsumerState<VaultUploaderPage> {
               TextField(
                 controller: _title,
                 decoration: const InputDecoration(labelText: 'Title'),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.sm,
+                ),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppTheme.white),
+                  borderRadius: AppRadius.brLg,
+                ),
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: VaultIcon(
+                    iconKey: _effectiveIconKey,
+                    size: 40,
+                    iconSize: 20,
+                  ),
+                  title: const Text(
+                    'Icon (optional)',
+                    style: TextStyle(
+                      color: AppTheme.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  subtitle: Text(
+                    IconCatalog.resolve(_effectiveIconKey).label,
+                    style: const TextStyle(
+                      color: AppTheme.white,
+                      fontSize: AppType.micro,
+                    ),
+                  ),
+                  trailing: const Icon(
+                    Icons.chevron_right,
+                    color: AppTheme.white,
+                  ),
+                  onTap: _pickIcon,
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
               Container(

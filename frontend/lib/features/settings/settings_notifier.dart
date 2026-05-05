@@ -23,6 +23,20 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     }
     state = state.copyWith(rememberMasterKey: value);
   }
+
+  /// Turning biometric on persists the master key (so unlock can be done by
+  /// the OS biometric sheet alone). Turning it off wipes the stored key.
+  Future<void> setBiometricLock(bool value) async {
+    await SettingsService.instance.writeBiometricLock(value);
+    await SettingsService.instance.writeRememberMasterKey(value);
+    if (!value) {
+      await SettingsService.instance.clearMasterKey();
+    }
+    state = state.copyWith(
+      biometricLock: value,
+      rememberMasterKey: value,
+    );
+  }
 }
 
 final settingsProvider =

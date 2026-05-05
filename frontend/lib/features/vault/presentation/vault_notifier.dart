@@ -203,6 +203,7 @@ class VaultNotifier extends StateNotifier<VaultListState> {
     required Uint8List bytes,
     required String mime,
     required String originalFilename,
+    String? iconKey,
     void Function(double progress)? onProgress,
   }) async {
     final fileEncrypted = await VaultCrypto.encrypt(_key, bytes);
@@ -212,6 +213,7 @@ class VaultNotifier extends StateNotifier<VaultListState> {
       'filename': originalFilename,
       'mime': mime,
       'fileIv': base64Encode(fileEncrypted.iv),
+      if (iconKey != null) 'iconKey': iconKey,
     });
 
     final repo = VaultRepository.instance;
@@ -243,9 +245,8 @@ class VaultNotifier extends StateNotifier<VaultListState> {
     }
   }
 
-  Future<({Uint8List bytes, String filename, String mime})> downloadFile(
-    VaultItem item,
-  ) async {
+  Future<({Uint8List bytes, String filename, String mime, String? iconKey})>
+  downloadFile(VaultItem item) async {
     final repo = VaultRepository.instance;
     final meta = await VaultCrypto.decryptJson(
       masterKey: _key,
@@ -263,6 +264,7 @@ class VaultNotifier extends StateNotifier<VaultListState> {
       bytes: plain,
       filename: meta['filename'] as String? ?? 'file',
       mime: meta['mime'] as String? ?? 'application/octet-stream',
+      iconKey: meta['iconKey'] as String?,
     );
   }
 

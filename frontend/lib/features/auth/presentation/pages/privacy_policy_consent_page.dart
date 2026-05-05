@@ -35,7 +35,8 @@ class _PrivacyPolicyConsentPageState
     final notifier = ref.read(authProvider.notifier);
 
     return Scaffold(
-      appBar: const KeepItAppBar(title: 'Privacy Policy Consent'),
+      backgroundColor: AppTheme.bg,
+      appBar: const KeepItAppBar(title: 'Privacy Policy'),
       body: SafeArea(
         child: FutureBuilder<PrivacyPolicyDocument>(
           future: _policyFuture,
@@ -44,112 +45,78 @@ class _PrivacyPolicyConsentPageState
             final isLoading =
                 snapshot.connectionState == ConnectionState.waiting;
 
-            return LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _PolicyHero(policy: policy, isLoading: isLoading),
-                        const SizedBox(height: AppSpacing.lg),
-                        _PolicySummaryStrip(isLoading: isLoading),
-                        const SizedBox(height: AppSpacing.lg),
-                        _PolicyCard(
-                          title: 'Policy document',
-                          subtitle:
-                              'Read the terms below before you continue. The important clauses are highlighted to avoid ambiguity.',
-                          child: isLoading
-                              ? const Padding(
-                                  padding: EdgeInsets.all(AppSpacing.xxl),
-                                  child: Center(
-                                    child: CircularProgressIndicator(
-                                      color: AppTheme.white,
-                                    ),
-                                  ),
-                                )
-                              : snapshot.hasError
-                              ? const _PolicyError(
-                                  message:
-                                      'Unable to load the latest policy. Please retry.',
-                                )
-                              : _PolicyBody(policy: policy!),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        _ConsentPanel(
-                          acknowledged: _acknowledged,
-                          onChanged: (value) =>
-                              setState(() => _acknowledged = value),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        _PolicyCard(
-                          title: 'Before you accept',
-                          subtitle:
-                              'This acknowledgement is permanent for this policy version. Loss of the master password means loss of access to encrypted vault data.',
-                          child: const Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _RuleLine(
-                                text: 'Keep your master password safe.',
-                              ),
-                              SizedBox(height: AppSpacing.sm),
-                              _RuleLine(
-                                text: 'The server cannot read your vault data.',
-                              ),
-                              SizedBox(height: AppSpacing.sm),
-                              _RuleLine(
-                                text:
-                                    'Acceptance is required to access the vault.',
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        if (auth.errorMessage != null)
-                          Padding(
-                            padding: const EdgeInsets.only(
-                              bottom: AppSpacing.sm,
-                            ),
-                            child: Text(
-                              auth.errorMessage!,
-                              style: const TextStyle(
-                                color: AppTheme.error,
-                                fontSize: AppType.caption,
-                                fontWeight: FontWeight.w700,
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _Hero(policy: policy, isLoading: isLoading),
+                  const SizedBox(height: AppSpacing.lg),
+                  _SummaryStrip(),
+                  const SizedBox(height: AppSpacing.lg),
+                  _PolicyCard(
+                    title: 'Policy document',
+                    subtitle:
+                        'Read the terms below before you continue. Bold lines are the binding clauses.',
+                    child: isLoading
+                        ? const Padding(
+                            padding: EdgeInsets.all(AppSpacing.xxl),
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                color: AppTheme.primary,
                               ),
                             ),
-                          ),
-                        AppButton(
-                          label: auth.isBusy
-                              ? 'Saving consent...'
-                              : 'Accept policy and continue',
-                          icon: Icons.verified,
-                          onPressed:
-                              !_acknowledged || auth.isBusy || policy == null
-                              ? null
-                              : () async {
-                                  await notifier.acceptLatestPrivacyPolicy();
-                                  if (context.mounted &&
-                                      ref.read(authProvider).stage !=
-                                          AuthStage.needsPolicyConsent) {
-                                    showAppSnack(
-                                      context,
-                                      'Privacy policy accepted',
-                                      kind: AppSnackKind.success,
-                                    );
-                                  }
-                                },
-                        ),
-                        const SizedBox(height: AppSpacing.xl),
-                      ],
-                    ),
+                          )
+                        : snapshot.hasError
+                            ? const _PolicyError(
+                                message:
+                                    'Unable to load the latest policy. Please retry.',
+                              )
+                            : _PolicyBody(policy: policy!),
                   ),
-                );
-              },
+                  const SizedBox(height: AppSpacing.lg),
+                  _ConsentPanel(
+                    acknowledged: _acknowledged,
+                    onChanged: (value) =>
+                        setState(() => _acknowledged = value),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  if (auth.errorMessage != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: Text(
+                        auth.errorMessage!,
+                        style: const TextStyle(
+                          color: AppTheme.error,
+                          fontSize: AppType.caption,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  AppButton(
+                    label: auth.isBusy
+                        ? 'Saving consent…'
+                        : 'Accept and continue',
+                    icon: Icons.verified,
+                    variant: AppButtonVariant.accent,
+                    onPressed: !_acknowledged || auth.isBusy || policy == null
+                        ? null
+                        : () async {
+                            await notifier.acceptLatestPrivacyPolicy();
+                            if (context.mounted &&
+                                ref.read(authProvider).stage !=
+                                    AuthStage.needsPolicyConsent) {
+                              showAppSnack(
+                                context,
+                                'Privacy policy accepted',
+                                kind: AppSnackKind.success,
+                              );
+                            }
+                          },
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
+              ),
             );
           },
         ),
@@ -158,8 +125,8 @@ class _PrivacyPolicyConsentPageState
   }
 }
 
-class _PolicyHero extends StatelessWidget {
-  const _PolicyHero({required this.policy, required this.isLoading});
+class _Hero extends StatelessWidget {
+  const _Hero({required this.policy, required this.isLoading});
 
   final PrivacyPolicyDocument? policy;
   final bool isLoading;
@@ -169,110 +136,108 @@ class _PolicyHero extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        color: AppTheme.black,
-        border: Border.all(color: AppTheme.white),
-        borderRadius: AppRadius.brXl,
+        color: AppTheme.heroGreen,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Consent required before vault access',
-                      style: TextStyle(
-                        color: AppTheme.white,
-                        fontSize: AppType.title,
-                        fontWeight: FontWeight.w900,
-                        height: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    RichText(
-                      text: const TextSpan(
-                        style: TextStyle(
-                          color: AppTheme.white,
-                          fontSize: AppType.body,
-                          height: 1.45,
-                        ),
-                        children: [
-                          TextSpan(
-                            text: 'Please review the policy carefully. ',
-                          ),
-                          TextSpan(
-                            text:
-                                'The bold, underlined statements below are the binding parts.',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              decoration: TextDecoration.underline,
-                              decorationThickness: 2,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppTheme.primary,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.verified_user_outlined,
+                  color: Colors.white,
+                  size: 22,
                 ),
               ),
-              const SizedBox(width: AppSpacing.md),
-              _VersionBadge(
-                label: isLoading ? 'Loading' : 'Version',
-                value: isLoading ? '...' : policy?.version ?? '-',
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  border: Border.all(color: AppTheme.hairline),
+                ),
+                child: Text(
+                  isLoading ? 'Loading…' : 'Version ${policy?.version ?? "—"}',
+                  style: const TextStyle(
+                    color: AppTheme.fg,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                  ),
+                ),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          Text(
-            isLoading
-                ? 'Loading latest policy...'
-                : 'Updated ${_formatDate(policy?.updatedAt)}',
-            style: const TextStyle(
-              color: AppTheme.white,
-              fontSize: AppType.micro,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
+          const Text(
+            'Consent required',
+            style: TextStyle(
+              color: AppTheme.fg,
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
             ),
           ),
+          const SizedBox(height: 6),
+          const Text(
+            'Please review the privacy policy. Your master password is the only key that decrypts your vault — keep it safe.',
+            style: TextStyle(
+              color: AppTheme.muted,
+              fontSize: 13,
+              height: 1.45,
+            ),
+          ),
+          if (!isLoading && policy?.updatedAt != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Updated ${_formatDate(policy!.updatedAt)}',
+              style: const TextStyle(
+                color: AppTheme.muted,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  String _formatDate(DateTime? date) {
-    if (date == null) return '-';
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  }
+  String _formatDate(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 }
 
-class _PolicySummaryStrip extends StatelessWidget {
-  const _PolicySummaryStrip({required this.isLoading});
-
-  final bool isLoading;
-
+class _SummaryStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Expanded(
           child: _SummaryTile(
+            icon: Icons.lock_outline,
             label: 'Zero knowledge',
-            value: 'Server cannot read vault content',
-            emphasized: true,
-            isLoading: isLoading,
+            value: 'Server can\'t read your vault',
           ),
         ),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
           child: _SummaryTile(
-            label: 'Master password',
-            value: 'Loss means permanent loss of access',
-            emphasized: false,
-            isLoading: isLoading,
+            icon: Icons.key_outlined,
+            label: 'Master key',
+            value: 'Lose it, lose access',
           ),
         ),
       ],
@@ -282,95 +247,50 @@ class _PolicySummaryStrip extends StatelessWidget {
 
 class _SummaryTile extends StatelessWidget {
   const _SummaryTile({
+    required this.icon,
     required this.label,
     required this.value,
-    required this.emphasized,
-    required this.isLoading,
   });
 
+  final IconData icon;
   final String label;
   final String value;
-  final bool emphasized;
-  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppTheme.black,
-        border: Border.all(color: AppTheme.white),
-        borderRadius: AppRadius.brLg,
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppTheme.hairline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label.toUpperCase(),
-            style: const TextStyle(
-              color: AppTheme.white,
-              fontSize: AppType.micro,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.1,
-            ),
+          Row(
+            children: [
+              Icon(icon, size: 16, color: AppTheme.primaryDark),
+              const SizedBox(width: 6),
+              Text(
+                label.toUpperCase(),
+                style: const TextStyle(
+                  color: AppTheme.muted,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            isLoading ? '...' : value,
-            style: TextStyle(
-              color: AppTheme.white,
-              fontSize: AppType.body,
-              fontWeight: emphasized ? FontWeight.w800 : FontWeight.w600,
-              fontStyle: emphasized ? FontStyle.italic : FontStyle.normal,
-              decoration: emphasized
-                  ? TextDecoration.underline
-                  : TextDecoration.none,
-              decorationThickness: 1.5,
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VersionBadge extends StatelessWidget {
-  const _VersionBadge({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.md,
-      ),
-      decoration: BoxDecoration(
-        color: AppTheme.white,
-        borderRadius: AppRadius.brPill,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: const TextStyle(
-              color: AppTheme.black,
-              fontSize: AppType.micro,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.1,
-            ),
-          ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 6),
           Text(
             value,
             style: const TextStyle(
-              color: AppTheme.black,
-              fontSize: AppType.body,
-              fontWeight: FontWeight.w900,
+              color: AppTheme.fg,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              height: 1.3,
             ),
           ),
         ],
@@ -395,9 +315,9 @@ class _PolicyCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppTheme.black,
-        border: Border.all(color: AppTheme.white),
-        borderRadius: AppRadius.brLg,
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppTheme.hairline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -405,22 +325,22 @@ class _PolicyCard extends StatelessWidget {
           Text(
             title.toUpperCase(),
             style: const TextStyle(
-              color: AppTheme.white,
-              fontSize: AppType.micro,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.1,
+              color: AppTheme.muted,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.0,
             ),
           ),
-          const SizedBox(height: AppSpacing.xs),
+          const SizedBox(height: 4),
           Text(
             subtitle,
             style: const TextStyle(
-              color: AppTheme.white,
-              fontSize: AppType.caption,
+              color: AppTheme.muted,
+              fontSize: 12,
               height: 1.45,
             ),
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.md),
           child,
         ],
       ),
@@ -462,11 +382,9 @@ class _PolicySection extends StatelessWidget {
       return Text(
         section.substring(2),
         style: const TextStyle(
-          color: AppTheme.white,
+          color: AppTheme.fg,
           fontSize: AppType.subtitle,
-          fontWeight: FontWeight.w900,
-          decoration: TextDecoration.underline,
-          decorationThickness: 2,
+          fontWeight: FontWeight.w800,
         ),
       );
     }
@@ -475,10 +393,9 @@ class _PolicySection extends StatelessWidget {
       return Text(
         section.substring(3),
         style: const TextStyle(
-          color: AppTheme.white,
+          color: AppTheme.fg,
           fontSize: AppType.body,
           fontWeight: FontWeight.w800,
-          fontStyle: FontStyle.italic,
         ),
       );
     }
@@ -513,7 +430,6 @@ class _PolicySection extends StatelessWidget {
 
 class _FormattedParagraph extends StatelessWidget {
   const _FormattedParagraph({required this.text});
-
   final String text;
 
   @override
@@ -521,7 +437,7 @@ class _FormattedParagraph extends StatelessWidget {
     return RichText(
       text: TextSpan(
         style: const TextStyle(
-          color: AppTheme.white,
+          color: AppTheme.fg,
           fontSize: AppType.body,
           height: 1.55,
         ),
@@ -533,7 +449,6 @@ class _FormattedParagraph extends StatelessWidget {
 
 class _BulletLine extends StatelessWidget {
   const _BulletLine({required this.text});
-
   final String text;
 
   @override
@@ -543,13 +458,14 @@ class _BulletLine extends StatelessWidget {
       children: [
         const Padding(
           padding: EdgeInsets.only(top: 7),
-          child: Text('• ', style: TextStyle(color: AppTheme.white)),
+          child: Icon(Icons.circle, color: AppTheme.primary, size: 6),
         ),
+        const SizedBox(width: AppSpacing.sm),
         Expanded(
           child: RichText(
             text: TextSpan(
               style: const TextStyle(
-                color: AppTheme.white,
+                color: AppTheme.fg,
                 fontSize: AppType.body,
                 height: 1.5,
               ),
@@ -558,43 +474,6 @@ class _BulletLine extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _RuleLine extends StatelessWidget {
-  const _RuleLine({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final split = text.split(':');
-    final lead = split.first;
-    final tail = split.length > 1 ? split.sublist(1).join(':').trim() : '';
-
-    return RichText(
-      text: TextSpan(
-        style: const TextStyle(
-          color: AppTheme.white,
-          fontSize: AppType.body,
-          height: 1.45,
-        ),
-        children: [
-          TextSpan(
-            text: lead,
-            style: const TextStyle(
-              fontWeight: FontWeight.w900,
-              decoration: TextDecoration.underline,
-            ),
-          ),
-          if (tail.isNotEmpty)
-            TextSpan(
-              text: ': $tail',
-              style: const TextStyle(fontStyle: FontStyle.italic),
-            ),
-        ],
-      ),
     );
   }
 }
@@ -612,12 +491,11 @@ List<InlineSpan> _parseInlineStyles(String text) {
       TextSpan(
         text: buffer.toString(),
         style: TextStyle(
-          fontWeight: bold ? FontWeight.w900 : FontWeight.normal,
+          fontWeight: bold ? FontWeight.w800 : FontWeight.normal,
           fontStyle: italic ? FontStyle.italic : FontStyle.normal,
           decoration: underline
               ? TextDecoration.underline
               : TextDecoration.none,
-          decorationThickness: 1.5,
         ),
       ),
     );
@@ -659,57 +537,51 @@ class _ConsentPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.xl),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppTheme.black,
-        border: Border.all(color: AppTheme.white),
-        borderRadius: AppRadius.brXl,
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(
+          color: acknowledged ? AppTheme.primary : AppTheme.hairline,
+          width: acknowledged ? 1.4 : 1,
+        ),
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Required acknowledgement',
-            style: TextStyle(
-              color: AppTheme.white,
-              fontSize: AppType.micro,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.1,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          const Text(
-            'You must confirm the clauses below before the app unlocks the vault.',
-            style: TextStyle(
-              color: AppTheme.white,
-              fontSize: AppType.caption,
-              height: 1.45,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          CheckboxListTile(
+          Checkbox(
             value: acknowledged,
-            onChanged: (value) => onChanged(value ?? false),
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            activeColor: AppTheme.white,
-            checkColor: AppTheme.black,
-            title: const Text(
-              'I understand that KeepIt cannot recover my encrypted data if I lose my master password.',
-              style: TextStyle(
-                color: AppTheme.white,
-                fontSize: AppType.body,
-                height: 1.45,
-                fontWeight: FontWeight.w700,
-              ),
+            onChanged: (v) => onChanged(v ?? false),
+            activeColor: AppTheme.primary,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
-            subtitle: const Text(
-              'Acceptance is required before the vault can be opened.',
-              style: TextStyle(
-                color: AppTheme.white,
-                fontSize: AppType.micro,
-                fontStyle: FontStyle.italic,
-              ),
+            visualDensity: VisualDensity.compact,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'I understand and accept',
+                  style: TextStyle(
+                    color: AppTheme.fg,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'KeepIt cannot recover my encrypted data if I lose my master password. Acceptance is required to access the vault.',
+                  style: TextStyle(
+                    color: AppTheme.muted,
+                    fontSize: 12,
+                    height: 1.45,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -720,19 +592,21 @@ class _ConsentPanel extends StatelessWidget {
 
 class _PolicyError extends StatelessWidget {
   const _PolicyError({required this.message});
-
   final String message;
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Text(
-        message,
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          color: AppTheme.error,
-          fontSize: AppType.body,
-          fontWeight: FontWeight.w700,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Text(
+          message,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: AppTheme.error,
+            fontSize: AppType.body,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     );

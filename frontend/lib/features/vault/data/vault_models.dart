@@ -96,6 +96,8 @@ class PasswordPayload {
     required this.password,
     this.url,
     this.notes,
+    this.iconKey,
+    this.category,
   });
 
   final String username;
@@ -103,11 +105,20 @@ class PasswordPayload {
   final String? url;
   final String? notes;
 
+  /// Stable catalog key — see [IconCatalog]. Visual mapping only; safe to
+  /// rename/retire entries as long as old keys still resolve.
+  final String? iconKey;
+
+  /// Free-form category label (e.g. "Work", "Personal", "Crypto"). Encrypted.
+  final String? category;
+
   Map<String, dynamic> toJson() => {
     'username': username,
     'password': password,
     if (url != null) 'url': url,
     if (notes != null) 'notes': notes,
+    if (iconKey != null) 'iconKey': iconKey,
+    if (category != null) 'category': category,
   };
 
   factory PasswordPayload.fromJson(Map<String, dynamic> json) => PasswordPayload(
@@ -115,6 +126,8 @@ class PasswordPayload {
     password: json['password'] as String? ?? '',
     url: json['url'] as String?,
     notes: json['notes'] as String?,
+    iconKey: json['iconKey'] as String?,
+    category: json['category'] as String?,
   );
 }
 
@@ -133,21 +146,35 @@ class KeyPayload {
     required this.value,
     this.kind,
     this.notes,
+    this.iconKey,
+    this.category,
   });
 
   final String value;
   final String? kind;
   final String? notes;
+  final String? iconKey;
+  final String? category;
 
   Map<String, dynamic> toJson() => {
     'value': value,
     if (kind != null) 'kind': kind,
     if (notes != null) 'notes': notes,
+    if (iconKey != null) 'iconKey': iconKey,
+    if (category != null) 'category': category,
   };
 
   factory KeyPayload.fromJson(Map<String, dynamic> json) => KeyPayload(
     value: json['value'] as String? ?? '',
     kind: json['kind'] as String?,
     notes: json['notes'] as String?,
+    iconKey: json['iconKey'] as String?,
+    category: json['category'] as String?,
   );
+}
+
+class NoteMeta {
+  const NoteMeta({this.iconKey, this.category});
+  final String? iconKey;
+  final String? category;
 }
