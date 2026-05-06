@@ -336,6 +336,35 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  /// Forces the user back to the unlock screen after a master-password
+  /// rotation. Clears all in-memory and persisted derived keys (a stale
+  /// biometric-stored key would still be the *old* master key and would fail
+  /// to decrypt anything), refreshes the cached profile with the new salt/
+  /// params so the unlock prompt derives the correct key, and disables
+  /// biometric lock so the user is required to enter the new password at
+  /// least once.
+  Future<void> lockAfterMasterRotation({
+    required String saltBase64,
+    required KdfParams params,
+  }) async {
+    _masterKey = null;
+    await SettingsService.instance.clearMasterKey();
+    final settings = await SettingsService.instance.read();
+    if (settings.biometricLock) {
+      await SettingsService.instance.writeBiometricLock(false);
+    }
+    final user = state.user?.copyWith(
+      masterSalt: saltBase64,
+      masterParams: params,
+    );
+    if (user != null) {
+      await SecureStore.instance.writeCachedUser(jsonEncode(user.toJson()));
+      state = state.copyWith(user: user, stage: AuthStage.locked);
+    } else {
+      state = state.copyWith(stage: AuthStage.locked);
+    }
+  }
+
   Future<void> _persistKeyIfRemembered() async {
     if (_masterKey == null) return;
     final settings = await SettingsService.instance.read();

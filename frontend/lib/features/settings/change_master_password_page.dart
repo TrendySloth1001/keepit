@@ -3,14 +3,12 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../app/theme/app_theme.dart';
 import '../../app/theme/tokens.dart';
 import '../../shared/crypto/share_crypto.dart';
 import '../../shared/crypto/vault_crypto.dart';
 import '../../shared/network/api_error.dart';
-import '../../shared/storage/settings_service.dart';
 import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_snack.dart';
 import '../../shared/widgets/inline_message.dart';
@@ -189,16 +187,18 @@ class _ChangeMasterPasswordPageState
         keypair: keypairPayload,
       );
 
-      // 6) Update local in-memory key + persisted-key (if biometric/remember on).
-      await ref.read(authProvider.notifier).adoptRotatedMasterKey(
-            key: newDerived.key,
+      // 6) Force the user back to the unlock screen. We deliberately do *not*
+      // adopt the new key in-memory: any cached state in the running app
+      // (decrypted item lists, share keypair, etc) was derived from the OLD
+      // key and would fail or leak after the rotation. Locking and requiring
+      // a fresh unlock with the new password gives every consumer a clean
+      // slate. We also wipe the persisted/biometric-stored key — that copy is
+      // still the *old* master key and would unlock the vault into a broken
+      // state.
+      await ref.read(authProvider.notifier).lockAfterMasterRotation(
             saltBase64: base64Encode(newSaltBytes),
             params: newParams,
           );
-      final settings = await SettingsService.instance.read();
-      if (settings.rememberMasterKey || settings.biometricLock) {
-        await SettingsService.instance.writeMasterKey(newDerived.key);
-      }
 
       if (!mounted) return;
       setState(() {
@@ -208,10 +208,9 @@ class _ChangeMasterPasswordPageState
       });
       showAppSnack(
         context,
-        'Master password updated',
+        'Master password updated — sign in with your new password',
         kind: AppSnackKind.success,
       );
-      context.pop();
     } catch (e) {
       if (!mounted) return;
       setState(() {

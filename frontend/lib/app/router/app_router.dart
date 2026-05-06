@@ -20,7 +20,9 @@ import '../../features/share/presentation/pages/shared_with_me_page.dart';
 import '../../features/vault/data/vault_models.dart';
 import '../../features/vault/presentation/pages/vault_file_viewer.dart';
 import '../../features/vault/presentation/pages/vault_home_page.dart';
+import '../../features/vault/presentation/pages/upgrade_page.dart';
 import '../../features/vault/presentation/pages/vault_icon_picker_page.dart';
+import '../../features/settings/about_page.dart';
 import '../../features/vault/presentation/pages/vault_item_viewer.dart';
 import '../../features/vault/presentation/pages/vault_key_editor.dart';
 import '../../features/vault/presentation/pages/vault_note_editor.dart';
@@ -82,6 +84,7 @@ GoRouter buildAppRouter(Ref ref) {
       ),
       GoRoute(path: '/vault', builder: (_, _) => const VaultHomePage()),
       GoRoute(path: '/vault/settings', builder: (_, _) => const SettingsPage()),
+      GoRoute(path: '/vault/about', builder: (_, _) => const AboutPage()),
       GoRoute(path: '/vault/account', builder: (_, _) => const AccountPage()),
       GoRoute(
         path: '/vault/account/master-password',
@@ -104,16 +107,12 @@ GoRouter buildAppRouter(Ref ref) {
         path: '/vault/shared/view',
         builder: (_, state) {
           final args = state.extra! as SharedItemViewArgs;
-          return SharedItemViewer(
-            item: args.item,
-            incoming: args.incoming,
-          );
+          return SharedItemViewer(item: args.item, incoming: args.incoming);
         },
       ),
       GoRoute(
         path: '/vault/view',
-        builder: (_, state) =>
-            VaultItemViewer(item: state.extra! as VaultItem),
+        builder: (_, state) => VaultItemViewer(item: state.extra! as VaultItem),
       ),
       GoRoute(
         path: '/vault/edit/password',
@@ -147,6 +146,7 @@ GoRouter buildAppRouter(Ref ref) {
         builder: (_, state) =>
             VaultIconPickerPage(initial: state.extra as String?),
       ),
+      GoRoute(path: '/vault/upgrade', builder: (_, _) => const UpgradePage()),
     ],
   );
 }

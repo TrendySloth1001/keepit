@@ -72,18 +72,22 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/logo/
 
 # Configuration for generating native launcher icons and native splash screen.
 # This points to the SVG in assets/images/logo.svg. Some generators require
 # a raster PNG; see commands below to convert if needed.
-flutter_icons:
+flutter_launcher_icons:
   android: true
   ios: true
-  image_path: assets/images/brand.png
+  remove_alpha_ios: true
+  image_path: assets/logo/app-icon-padded.png
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: assets/logo/app-icon-foreground.png
 
 flutter_native_splash:
-  color: "#000000"
-  image: assets/images/brand.png
+  color: "#FFFFFF"
+  image: assets/logo/app-icon-padded.png
   android: true
   ios: true
   web: false

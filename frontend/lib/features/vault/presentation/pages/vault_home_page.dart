@@ -113,9 +113,7 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
     }
     if (search.trim().isEmpty) return filtered;
     final q = search.toLowerCase();
-    return filtered
-        .where((i) => i.title.toLowerCase().contains(q))
-        .toList();
+    return filtered.where((i) => i.title.toLowerCase().contains(q)).toList();
   }
 
   String _greeting() {
@@ -132,8 +130,11 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
     final shareState = ref.watch(shareProvider);
     final user = ref.watch(authProvider).user;
     final firstName = (user?.name ?? '').split(' ').first;
-    final sharedItems =
-      _filterShared(shareState.received, state.typeFilter, state.search);
+    final sharedItems = _filterShared(
+      shareState.received,
+      state.typeFilter,
+      state.search,
+    );
     final totalVisible = state.visibleItems.length + sharedItems.length;
 
     return AutoLockScope(
@@ -178,12 +179,7 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
                       AppSpacing.md,
                     ),
                     child: StorageMeter(
-                      onUpgrade: () => ScaffoldMessenger.of(context)
-                          .showSnackBar(
-                            const SnackBar(
-                              content: Text('Premium is coming soon'),
-                            ),
-                          ),
+                      onUpgrade: () => context.push('/vault/upgrade'),
                     ),
                   ),
                 ),
@@ -193,7 +189,9 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
                     onChanged: notifier.setTypeFilter,
                   ),
                 ),
-                const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: AppSpacing.sm),
+                ),
                 if (state.errorMessage != null)
                   SliverToBoxAdapter(
                     child: Padding(
@@ -228,7 +226,8 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
                         title: state.search.isEmpty && state.typeFilter == null
                             ? 'Your vault is empty'
                             : 'No matching items',
-                        message: state.search.isEmpty && state.typeFilter == null
+                        message:
+                            state.search.isEmpty && state.typeFilter == null
                             ? 'Tap + to add your first encrypted item.'
                             : 'Try a different search or filter.',
                       ),
@@ -243,8 +242,7 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
                       96,
                     ),
                     sliver: SliverList.separated(
-                      itemCount:
-                          totalVisible + (state.isPaging ? 1 : 0),
+                      itemCount: totalVisible + (state.isPaging ? 1 : 0),
                       separatorBuilder: (_, _) =>
                           const SizedBox(height: AppSpacing.sm),
                       itemBuilder: (_, i) {
@@ -330,14 +328,21 @@ class _Hero extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: AppTheme.primary,
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 alignment: Alignment.center,
-                child: const Icon(
-                  Icons.shield,
-                  color: Colors.white,
-                  size: 20,
+                child: Image.asset(
+                  'assets/logo/wallet-passes-app-logo.png',
+                  width: 24,
+                  height: 24,
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -351,28 +356,67 @@ class _Hero extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              IconButton(
-                tooltip: 'Lock',
-                onPressed: onLock,
-                icon: const Icon(Icons.lock_outline, color: AppTheme.fg),
+              InkWell(
+                onTap: onLock,
+                borderRadius: BorderRadius.circular(40),
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.lock_outline,
+                    color: AppTheme.fg,
+                    size: 20,
+                  ),
+                ),
               ),
+              const SizedBox(width: AppSpacing.sm),
               GestureDetector(
                 onTap: onSettings,
-                child: CircleAvatar(
-                  radius: 18,
-                  backgroundColor: AppTheme.primary,
-                  backgroundImage: (avatarUrl != null && avatarUrl!.isNotEmpty)
-                      ? NetworkImage(avatarUrl!)
-                      : null,
-                  child: (avatarUrl == null || avatarUrl!.isEmpty)
-                      ? Text(
-                          firstName.isEmpty ? '?' : firstName[0].toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        )
-                      : null,
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(2),
+                  child: CircleAvatar(
+                    backgroundColor: AppTheme.primary,
+                    backgroundImage:
+                        (avatarUrl != null && avatarUrl!.isNotEmpty)
+                        ? NetworkImage(avatarUrl!)
+                        : null,
+                    child: (avatarUrl == null || avatarUrl!.isEmpty)
+                        ? Text(
+                            firstName.isEmpty
+                                ? '?'
+                                : firstName[0].toUpperCase(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                            ),
+                          )
+                        : null,
+                  ),
                 ),
               ),
             ],

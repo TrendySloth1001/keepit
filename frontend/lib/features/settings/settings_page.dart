@@ -113,6 +113,13 @@ class SettingsPage extends ConsumerWidget {
               subtitle: 'Guides, FAQs, contact us',
               onTap: () => context.push('/vault/help'),
             ),
+            const SizedBox(height: AppSpacing.sm),
+            SettingsTile(
+              icon: Icons.info_outline,
+              title: 'About KeepIt',
+              subtitle: 'Version, licenses, attribution',
+              onTap: () => context.push('/vault/about'),
+            ),
             const SizedBox(height: AppSpacing.huge),
           ],
         ),
@@ -220,9 +227,9 @@ class SettingsPage extends ConsumerWidget {
   }
 
   void _comingSoon(BuildContext context, String label) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label is coming soon')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$label is coming soon')));
   }
 }
 
@@ -321,10 +328,7 @@ class _ProfileSummary extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(
-                Icons.chevron_right,
-                color: AppTheme.muted,
-              ),
+              const Icon(Icons.chevron_right, color: AppTheme.muted),
             ],
           ),
         ),

@@ -17,6 +17,7 @@ class KeepItAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
+      backgroundColor: Colors.transparent,
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

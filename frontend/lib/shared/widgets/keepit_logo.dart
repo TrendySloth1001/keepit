@@ -26,16 +26,14 @@ class KeepItLogo extends StatelessWidget {
             ? BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
                 shape: BoxShape.circle,
-                border: Border.all(color: color, width: 1.5),
               )
             : null,
         alignment: Alignment.center,
-        child: SvgPicture.asset(
-          'assets/images/logo.svg',
+        child: Image.asset(
+          'assets/logo/wallet-passes-app-logo.png',
           width: size * 0.72,
           height: size * 0.72,
           fit: BoxFit.contain,
-          colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
         ),
       ),
     );
