@@ -90,6 +90,7 @@ class ShareNotifier extends StateNotifier<ShareState> {
     required String title,
     required Map<String, dynamic> payload,
     String permission = 'view',
+    int? expiresInDays,
   }) async {
     final recipient = await _repo.lookup(email);
     final sealed = await ShareCrypto.sealForRecipient(
@@ -104,6 +105,7 @@ class ShareNotifier extends StateNotifier<ShareState> {
       cipherIv: sealed.cipherIv,
       wrappedKey: sealed.wrappedKey,
       permission: permission,
+      expiresInDays: expiresInDays,
     );
     state = state.copyWith(sent: [created, ...state.sent]);
   }

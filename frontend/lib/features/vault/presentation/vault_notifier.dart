@@ -245,6 +245,38 @@ class VaultNotifier extends StateNotifier<VaultListState> {
     }
   }
 
+  /// Re-encrypts the file's metadata blob (filename + iconKey) and updates the
+  /// title — without re-uploading any of the (large) ciphertext bytes. The
+  /// fileIv is preserved so existing ciphertext remains decryptable.
+  Future<VaultItem> updateFileMeta({
+    required VaultItem item,
+    required String title,
+    String? iconKey,
+  }) async {
+    final repo = VaultRepository.instance;
+    // Re-decrypt only the meta blob to recover filename/mime/fileIv, then
+    // re-seal with the same per-asset IV intact.
+    final meta = await VaultCrypto.decryptJson(
+      masterKey: _key,
+      cipherBlob: item.cipherBlob,
+      cipherIv: item.cipherIv,
+    );
+    final encryptedMeta = await VaultCrypto.encryptJson(_key, {
+      'filename': meta['filename'] ?? title,
+      'mime': meta['mime'] ?? 'application/octet-stream',
+      'fileIv': meta['fileIv'],
+      if (iconKey != null) 'iconKey': iconKey,
+    });
+    final updated = await repo.update(
+      item.id,
+      title: title,
+      cipherBlob: encryptedMeta.cipherBlob,
+      cipherIv: encryptedMeta.cipherIv,
+    );
+    _upsertLocal(updated);
+    return updated;
+  }
+
   Future<({Uint8List bytes, String filename, String mime, String? iconKey})>
   downloadFile(VaultItem item) async {
     final repo = VaultRepository.instance;

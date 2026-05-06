@@ -51,6 +51,7 @@ class ShareRepository {
     required String cipherIv,
     required String wrappedKey,
     String permission = 'view',
+    int? expiresInDays,
   }) async {
     final res = await _dio.post(
       ApiConstants.shares,
@@ -62,6 +63,7 @@ class ShareRepository {
         'cipherIv': cipherIv,
         'wrappedKey': wrappedKey,
         'permission': permission,
+        if (expiresInDays != null) 'expiresInDays': expiresInDays,
       },
     );
     return SharedItem.fromJson(

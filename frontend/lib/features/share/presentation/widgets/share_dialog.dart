@@ -30,6 +30,8 @@ class _ShareItemSheetState extends ConsumerState<ShareItemSheet> {
   bool _busy = false;
   String? _error;
   String? _success;
+  // null = no expiry. Otherwise number of days.
+  int? _expiryDays = 7;
 
   @override
   void dispose() {
@@ -54,10 +56,13 @@ class _ShareItemSheetState extends ConsumerState<ShareItemSheet> {
             type: widget.type,
             title: widget.title,
             payload: widget.payload,
+            expiresInDays: _expiryDays,
           );
       setState(() {
         _busy = false;
-        _success = 'Shared with $email — only they can decrypt it.';
+        _success = _expiryDays == null
+            ? 'Shared with $email — only they can decrypt it.'
+            : 'Shared with $email. Auto-revokes in $_expiryDays day${_expiryDays == 1 ? '' : 's'}.';
         _email.clear();
       });
     } catch (e) {
@@ -97,8 +102,8 @@ class _ShareItemSheetState extends ConsumerState<ShareItemSheet> {
             ],
           ),
           const SizedBox(height: 4),
-          Text(
-            'Enter the recipient\'s email. The item is sealed to their key — '
+          const Text(
+            "Enter the recipient's email. The item is sealed to their key — "
             'only that account can ever decrypt it, even if someone else gets '
             'the share id.',
             style: TextStyle(color: AppTheme.muted, fontSize: 13, height: 1.4),
@@ -113,6 +118,48 @@ class _ShareItemSheetState extends ConsumerState<ShareItemSheet> {
               prefixIcon: Icon(Icons.alternate_email),
               hintText: 'name@example.com',
             ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          const Text(
+            'AUTO-REVOKE',
+            style: TextStyle(
+              color: AppTheme.muted,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.4,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _ExpiryChip(
+                label: '1 day',
+                selected: _expiryDays == 1,
+                onTap: () => setState(() => _expiryDays = 1),
+              ),
+              _ExpiryChip(
+                label: '7 days',
+                selected: _expiryDays == 7,
+                onTap: () => setState(() => _expiryDays = 7),
+              ),
+              _ExpiryChip(
+                label: '30 days',
+                selected: _expiryDays == 30,
+                onTap: () => setState(() => _expiryDays = 30),
+              ),
+              _ExpiryChip(
+                label: '90 days',
+                selected: _expiryDays == 90,
+                onTap: () => setState(() => _expiryDays = 90),
+              ),
+              _ExpiryChip(
+                label: 'Never',
+                selected: _expiryDays == null,
+                onTap: () => setState(() => _expiryDays = null),
+              ),
+            ],
           ),
           if (_error != null) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -139,6 +186,48 @@ class _ShareItemSheetState extends ConsumerState<ShareItemSheet> {
             onPressed: () => Navigator.pop(context),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ExpiryChip extends StatelessWidget {
+  const _ExpiryChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? AppTheme.primary : AppTheme.surfaceAlt,
+      borderRadius: BorderRadius.circular(AppRadius.pill),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        onTap: onTap,
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            border: Border.all(
+              color: selected ? AppTheme.primary : AppTheme.hairline,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? Colors.white : AppTheme.fg,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
       ),
     );
   }

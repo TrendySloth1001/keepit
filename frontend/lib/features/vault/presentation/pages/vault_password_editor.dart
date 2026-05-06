@@ -36,6 +36,7 @@ class _VaultPasswordEditorState extends ConsumerState<VaultPasswordEditor> {
   final _url = TextEditingController();
   final _notes = TextEditingController();
   final _category = TextEditingController();
+  final List<_ExtraFieldController> _extras = [];
   bool _reveal = false;
   bool _isLoading = true;
   bool _isSaving = false;
@@ -75,6 +76,9 @@ class _VaultPasswordEditorState extends ConsumerState<VaultPasswordEditor> {
       _notes.text = p.notes ?? '';
       _category.text = p.category ?? '';
       _iconKey = p.iconKey;
+      for (final f in p.extras) {
+        _extras.add(_ExtraFieldController.fromField(f));
+      }
     } catch (e) {
       _error = 'Failed to decrypt: ${friendlyApiError(e)}';
     } finally {
@@ -90,6 +94,9 @@ class _VaultPasswordEditorState extends ConsumerState<VaultPasswordEditor> {
     _url.dispose();
     _notes.dispose();
     _category.dispose();
+    for (final extra in _extras) {
+      extra.dispose();
+    }
     super.dispose();
   }
 
@@ -109,12 +116,24 @@ class _VaultPasswordEditorState extends ConsumerState<VaultPasswordEditor> {
       setState(() => _error = 'Title is required');
       return;
     }
+    final extras = _extras
+        .map(
+          (f) => PasswordExtraField(
+            label: f.label.text.trim(),
+            value: f.value.text,
+            kind: f.kind,
+          ),
+        )
+        .where((f) => f.label.isNotEmpty || f.value.isNotEmpty)
+        .toList();
     setState(() {
       _isSaving = true;
       _error = null;
     });
     try {
-      await ref.read(vaultProvider.notifier).savePassword(
+      await ref
+          .read(vaultProvider.notifier)
+          .savePassword(
             id: widget.existing?.id,
             title: _title.text.trim(),
             payload: PasswordPayload(
@@ -126,6 +145,7 @@ class _VaultPasswordEditorState extends ConsumerState<VaultPasswordEditor> {
               category: _category.text.trim().isEmpty
                   ? null
                   : _category.text.trim(),
+              extras: extras,
             ),
           );
       if (mounted) {
@@ -179,6 +199,25 @@ class _VaultPasswordEditorState extends ConsumerState<VaultPasswordEditor> {
     if (v != null) setState(() => _password.text = v);
   }
 
+  void _addExtra(ExtraFieldKind kind) {
+    setState(() => _extras.add(_ExtraFieldController(kind: kind)));
+  }
+
+  void _removeExtra(int index) {
+    final removed = _extras.removeAt(index);
+    removed.dispose();
+    setState(() {});
+  }
+
+  Future<void> _openAddFieldSheet() async {
+    final kind = await showModalBottomSheet<ExtraFieldKind>(
+      context: context,
+      isScrollControlled: false,
+      builder: (_) => const _AddFieldSheet(),
+    );
+    if (kind != null) _addExtra(kind);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -210,6 +249,16 @@ class _VaultPasswordEditorState extends ConsumerState<VaultPasswordEditor> {
                   category: _category.text.trim().isEmpty
                       ? null
                       : _category.text.trim(),
+                  extras: _extras
+                      .map(
+                        (f) => PasswordExtraField(
+                          label: f.label.text.trim(),
+                          value: f.value.text,
+                          kind: f.kind,
+                        ),
+                      )
+                      .where((f) => f.label.isNotEmpty || f.value.isNotEmpty)
+                      .toList(),
                 ).toJson(),
               );
             },
@@ -281,10 +330,35 @@ class _VaultPasswordEditorState extends ConsumerState<VaultPasswordEditor> {
                           ),
                           const SizedBox(height: AppSpacing.lg),
                           SectionCard(
-                            title: 'CREDENTIALS',
-                            icon: Icons.key_outlined,
                             child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.key_outlined,
+                                      size: 16,
+                                      color: AppTheme.muted,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    const Text(
+                                      'CREDENTIALS',
+                                      style: TextStyle(
+                                        color: AppTheme.muted,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12,
+                                        letterSpacing: 0.6,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    TextButton.icon(
+                                      onPressed: _openAddFieldSheet,
+                                      icon: const Icon(Icons.add, size: 16),
+                                      label: const Text('Add'),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: AppSpacing.md),
                                 TextField(
                                   controller: _username,
                                   onChanged: (_) => setState(() {}),
@@ -312,7 +386,8 @@ class _VaultPasswordEditorState extends ConsumerState<VaultPasswordEditor> {
                                             duration: AppDurations.short,
                                             child: Icon(
                                               _reveal
-                                                  ? Icons.visibility_off_outlined
+                                                  ? Icons
+                                                        .visibility_off_outlined
                                                   : Icons.visibility_outlined,
                                               key: ValueKey(_reveal),
                                             ),
@@ -338,12 +413,36 @@ class _VaultPasswordEditorState extends ConsumerState<VaultPasswordEditor> {
                                 ),
                                 const SizedBox(height: AppSpacing.sm),
                                 PasswordStrengthMeter(password: _password.text),
+                                if (_extras.isNotEmpty) ...[
+                                  const SizedBox(height: AppSpacing.lg),
+                                  const Text(
+                                    'CUSTOM FIELDS',
+                                    style: TextStyle(
+                                      color: AppTheme.muted,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                      letterSpacing: 0.6,
+                                    ),
+                                  ),
+                                  const SizedBox(height: AppSpacing.sm),
+                                  for (var i = 0; i < _extras.length; i++)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: AppSpacing.md,
+                                      ),
+                                      child: _ExtraFieldCard(
+                                        field: _extras[i],
+                                        onRemove: () => _removeExtra(i),
+                                        onChanged: () => setState(() {}),
+                                      ),
+                                    ),
+                                ],
                               ],
                             ),
                           ),
                           const SizedBox(height: AppSpacing.lg),
                           SectionCard(
-                            title: 'EXTRAS',
+                            title: 'DETAILS',
                             icon: Icons.notes_outlined,
                             child: Column(
                               children: [
@@ -379,6 +478,202 @@ class _VaultPasswordEditorState extends ConsumerState<VaultPasswordEditor> {
                   ),
                 ],
               ),
+      ),
+    );
+  }
+}
+
+class _ExtraFieldController {
+  _ExtraFieldController({required this.kind, String? label, String? value})
+    : label = TextEditingController(text: label ?? ''),
+      value = TextEditingController(text: value ?? '');
+
+  factory _ExtraFieldController.fromField(PasswordExtraField field) =>
+      _ExtraFieldController(
+        kind: field.kind,
+        label: field.label,
+        value: field.value,
+      );
+
+  final TextEditingController label;
+  final TextEditingController value;
+  ExtraFieldKind kind;
+  bool reveal = false;
+
+  void dispose() {
+    label.dispose();
+    value.dispose();
+  }
+}
+
+class _AddFieldSheet extends StatelessWidget {
+  const _AddFieldSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Add field',
+              style: TextStyle(
+                color: AppTheme.fg,
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            const Text(
+              'Choose what to add to credentials.',
+              style: TextStyle(color: AppTheme.muted, fontSize: 13),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            _AddFieldTile(
+              kind: ExtraFieldKind.text,
+              description: 'Additional text detail',
+            ),
+            _AddFieldTile(
+              kind: ExtraFieldKind.password,
+              description: 'Secondary password',
+            ),
+            _AddFieldTile(
+              kind: ExtraFieldKind.note,
+              description: 'Secure note field',
+            ),
+            _AddFieldTile(
+              kind: ExtraFieldKind.key,
+              description: 'API key or token',
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AddFieldTile extends StatelessWidget {
+  const _AddFieldTile({required this.kind, required this.description});
+  final ExtraFieldKind kind;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.add_circle_outline, color: AppTheme.primary),
+      title: Text(
+        kind.label,
+        style: const TextStyle(fontWeight: FontWeight.w700),
+      ),
+      subtitle: Text(
+        description,
+        style: const TextStyle(color: AppTheme.muted),
+      ),
+      onTap: () => Navigator.pop(context, kind),
+    );
+  }
+}
+
+class _ExtraFieldCard extends StatefulWidget {
+  const _ExtraFieldCard({
+    required this.field,
+    required this.onRemove,
+    required this.onChanged,
+  });
+
+  final _ExtraFieldController field;
+  final VoidCallback onRemove;
+  final VoidCallback onChanged;
+
+  @override
+  State<_ExtraFieldCard> createState() => _ExtraFieldCardState();
+}
+
+class _ExtraFieldCardState extends State<_ExtraFieldCard> {
+  @override
+  Widget build(BuildContext context) {
+    final field = widget.field;
+    final isSecret = field.kind.isSecret;
+    final isMultiline = field.kind.isMultiline;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppTheme.hairline),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<ExtraFieldKind>(
+                  value: field.kind,
+                  decoration: const InputDecoration(labelText: 'Type'),
+                  items: ExtraFieldKind.values
+                      .map(
+                        (k) => DropdownMenuItem(value: k, child: Text(k.label)),
+                      )
+                      .toList(),
+                  onChanged: (k) {
+                    if (k == null) return;
+                    setState(() => field.kind = k);
+                    widget.onChanged();
+                  },
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              IconButton(
+                tooltip: 'Remove',
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: widget.onRemove,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            controller: field.label,
+            decoration: const InputDecoration(
+              labelText: 'Label',
+              hintText: 'e.g. Backup code, UPI PIN',
+            ),
+            onChanged: (_) => widget.onChanged(),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            controller: field.value,
+            maxLines: isMultiline ? 4 : 1,
+            obscureText: isSecret && !field.reveal,
+            decoration: InputDecoration(
+              labelText: 'Value',
+              alignLabelWithHint: isMultiline,
+              suffixIcon: isSecret
+                  ? IconButton(
+                      tooltip: field.reveal ? 'Hide' : 'Reveal',
+                      icon: Icon(
+                        field.reveal
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                      ),
+                      onPressed: () {
+                        setState(() => field.reveal = !field.reveal);
+                        widget.onChanged();
+                      },
+                    )
+                  : null,
+            ),
+            onChanged: (_) => widget.onChanged(),
+          ),
+        ],
       ),
     );
   }
@@ -485,10 +780,10 @@ class _CopyButton extends StatelessWidget {
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) => IconButton(
-        tooltip: 'Copy',
-        icon: const Icon(Icons.copy_outlined),
-        onPressed: onTap,
-      );
+    tooltip: 'Copy',
+    icon: const Icon(Icons.copy_outlined),
+    onPressed: onTap,
+  );
 }
 
 class _SaveBar extends StatelessWidget {

@@ -13,6 +13,7 @@ class SharedItem {
     required this.wrappedKey,
     required this.permission,
     required this.createdAt,
+    this.expiresAt,
   });
 
   final String id;
@@ -26,8 +27,12 @@ class SharedItem {
   final String wrappedKey;
   final String permission;
   final DateTime createdAt;
+  // Optional auto-revoke timestamp. null means "no expiry".
+  final DateTime? expiresAt;
 
   bool get canEdit => permission == 'edit';
+  bool get isExpired =>
+      expiresAt != null && DateTime.now().isAfter(expiresAt!);
 
   factory SharedItem.fromJson(Map<String, dynamic> json) => SharedItem(
         id: json['id'] as String,
@@ -41,6 +46,9 @@ class SharedItem {
         wrappedKey: json['wrappedKey'] as String,
         permission: json['permission'] as String? ?? 'view',
         createdAt: DateTime.parse(json['createdAt'] as String),
+        expiresAt: json['expiresAt'] == null
+            ? null
+            : DateTime.parse(json['expiresAt'] as String),
       );
 }
 
@@ -82,4 +90,11 @@ class StoredKeypair {
         privateCipher: json['privateCipher'] as String?,
         privateIv: json['privateIv'] as String?,
       );
+}
+
+class SharedItemViewArgs {
+  const SharedItemViewArgs({required this.item, required this.incoming});
+
+  final SharedItem item;
+  final bool incoming;
 }

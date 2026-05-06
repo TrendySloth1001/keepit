@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme/app_theme.dart';
 import '../../../../app/theme/tokens.dart';
@@ -11,6 +12,7 @@ import '../../../../shared/widgets/inline_message.dart';
 import '../../../../shared/widgets/keepit_app_bar.dart';
 import '../../../../shared/widgets/section_card.dart';
 import '../../../../shared/widgets/shimmer_box.dart';
+import '../../data/icon_catalog.dart';
 import '../../data/vault_models.dart';
 import '../vault_notifier.dart';
 
@@ -25,6 +27,7 @@ class VaultNoteEditor extends ConsumerStatefulWidget {
 class _VaultNoteEditorState extends ConsumerState<VaultNoteEditor> {
   final _title = TextEditingController();
   final _body = TextEditingController();
+  String? _iconKey;
   bool _isLoading = true;
   bool _isSaving = false;
   String? _error;
@@ -32,7 +35,14 @@ class _VaultNoteEditorState extends ConsumerState<VaultNoteEditor> {
   @override
   void initState() {
     super.initState();
+    _title.addListener(_maybeAutoIcon);
     _bootstrap();
+  }
+
+  void _maybeAutoIcon() {
+    if (_iconKey != null) return;
+    final guess = IconCatalog.guessFromTitle(_title.text);
+    if (guess.key != 'generic') setState(() {});
   }
 
   Future<void> _bootstrap() async {
@@ -48,6 +58,7 @@ class _VaultNoteEditorState extends ConsumerState<VaultNoteEditor> {
       final p = NotePayload.fromJson(decrypted);
       _title.text = existing.title;
       _body.text = p.body;
+      _iconKey = p.iconKey;
     } catch (e) {
       _error = 'Failed to decrypt: ${friendlyApiError(e)}';
     } finally {
@@ -62,6 +73,17 @@ class _VaultNoteEditorState extends ConsumerState<VaultNoteEditor> {
     super.dispose();
   }
 
+  String get _effectiveIconKey =>
+      _iconKey ?? IconCatalog.guessFromTitle(_title.text).key;
+
+  Future<void> _pickIcon() async {
+    final picked = await context.push<String>(
+      '/vault/icon-picker',
+      extra: _effectiveIconKey,
+    );
+    if (picked != null) setState(() => _iconKey = picked);
+  }
+
   Future<void> _save() async {
     if (_title.text.trim().isEmpty) {
       setState(() => _error = 'Title is required');
@@ -72,10 +94,12 @@ class _VaultNoteEditorState extends ConsumerState<VaultNoteEditor> {
       _error = null;
     });
     try {
-      await ref.read(vaultProvider.notifier).saveNote(
+      await ref
+          .read(vaultProvider.notifier)
+          .saveNote(
             id: widget.existing?.id,
             title: _title.text.trim(),
-            payload: NotePayload(body: _body.text),
+            payload: NotePayload(body: _body.text, iconKey: _iconKey),
           );
       if (mounted) {
         showAppSnack(context, 'Saved', kind: AppSnackKind.success);
@@ -150,6 +174,39 @@ class _VaultNoteEditorState extends ConsumerState<VaultNoteEditor> {
                             icon: Icons.sticky_note_2_outlined,
                             child: Column(
                               children: [
+                                ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: VaultIcon(
+                                    iconKey: _effectiveIconKey,
+                                    size: 40,
+                                    iconSize: 20,
+                                  ),
+                                  title: const Text(
+                                    'Icon (optional)',
+                                    style: TextStyle(
+                                      color: AppTheme.fg,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    IconCatalog.resolve(
+                                      _effectiveIconKey,
+                                    ).label,
+                                    style: const TextStyle(
+                                      color: AppTheme.muted,
+                                      fontSize: AppType.micro,
+                                    ),
+                                  ),
+                                  trailing: const Icon(
+                                    Icons.chevron_right,
+                                    color: AppTheme.muted,
+                                  ),
+                                  onTap: _pickIcon,
+                                ),
+                                const Divider(
+                                  color: AppTheme.hairline,
+                                  height: AppSpacing.lg,
+                                ),
                                 TextField(
                                   controller: _title,
                                   decoration: const InputDecoration(

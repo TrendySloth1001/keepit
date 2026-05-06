@@ -90,6 +90,55 @@ class StorageBreakdown {
 }
 
 /// Plaintext shapes (encrypted client-side before being persisted).
+enum ExtraFieldKind { text, password, note, key }
+
+ExtraFieldKind extraFieldKindFromKey(String? key) {
+  if (key == null || key.isEmpty) return ExtraFieldKind.text;
+  for (final kind in ExtraFieldKind.values) {
+    if (kind.name == key) return kind;
+  }
+  return ExtraFieldKind.text;
+}
+
+extension ExtraFieldKindX on ExtraFieldKind {
+  String get label => switch (this) {
+    ExtraFieldKind.text => 'Text',
+    ExtraFieldKind.password => 'Password',
+    ExtraFieldKind.note => 'Note',
+    ExtraFieldKind.key => 'Key',
+  };
+
+  bool get isSecret =>
+      this == ExtraFieldKind.password || this == ExtraFieldKind.key;
+
+  bool get isMultiline => this == ExtraFieldKind.note;
+}
+
+class PasswordExtraField {
+  const PasswordExtraField({
+    required this.label,
+    required this.value,
+    required this.kind,
+  });
+
+  final String label;
+  final String value;
+  final ExtraFieldKind kind;
+
+  Map<String, dynamic> toJson() => {
+    'label': label,
+    'value': value,
+    'kind': kind.name,
+  };
+
+  factory PasswordExtraField.fromJson(Map<String, dynamic> json) =>
+      PasswordExtraField(
+        label: json['label'] as String? ?? '',
+        value: json['value'] as String? ?? '',
+        kind: extraFieldKindFromKey(json['kind'] as String?),
+      );
+}
+
 class PasswordPayload {
   const PasswordPayload({
     required this.username,
@@ -98,6 +147,7 @@ class PasswordPayload {
     this.notes,
     this.iconKey,
     this.category,
+    this.extras = const [],
   });
 
   final String username;
@@ -112,6 +162,9 @@ class PasswordPayload {
   /// Free-form category label (e.g. "Work", "Personal", "Crypto"). Encrypted.
   final String? category;
 
+  /// Optional user-defined fields (notes, keys, or extra passwords).
+  final List<PasswordExtraField> extras;
+
   Map<String, dynamic> toJson() => {
     'username': username,
     'password': password,
@@ -119,26 +172,43 @@ class PasswordPayload {
     if (notes != null) 'notes': notes,
     if (iconKey != null) 'iconKey': iconKey,
     if (category != null) 'category': category,
+    if (extras.isNotEmpty) 'extras': extras.map((f) => f.toJson()).toList(),
   };
 
-  factory PasswordPayload.fromJson(Map<String, dynamic> json) => PasswordPayload(
-    username: json['username'] as String? ?? '',
-    password: json['password'] as String? ?? '',
-    url: json['url'] as String?,
-    notes: json['notes'] as String?,
-    iconKey: json['iconKey'] as String?,
-    category: json['category'] as String?,
-  );
+  factory PasswordPayload.fromJson(Map<String, dynamic> json) =>
+      PasswordPayload(
+        username: json['username'] as String? ?? '',
+        password: json['password'] as String? ?? '',
+        url: json['url'] as String?,
+        notes: json['notes'] as String?,
+        iconKey: json['iconKey'] as String?,
+        category: json['category'] as String?,
+        extras:
+            (json['extras'] as List?)
+                ?.cast<Map>()
+                .map(
+                  (m) =>
+                      PasswordExtraField.fromJson(Map<String, dynamic>.from(m)),
+                )
+                .toList() ??
+            const [],
+      );
 }
 
 class NotePayload {
-  const NotePayload({required this.body});
+  const NotePayload({required this.body, this.iconKey});
   final String body;
+  final String? iconKey;
 
-  Map<String, dynamic> toJson() => {'body': body};
+  Map<String, dynamic> toJson() => {
+    'body': body,
+    if (iconKey != null) 'iconKey': iconKey,
+  };
 
-  factory NotePayload.fromJson(Map<String, dynamic> json) =>
-      NotePayload(body: json['body'] as String? ?? '');
+  factory NotePayload.fromJson(Map<String, dynamic> json) => NotePayload(
+    body: json['body'] as String? ?? '',
+    iconKey: json['iconKey'] as String?,
+  );
 }
 
 class KeyPayload {

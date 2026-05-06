@@ -17,6 +17,15 @@ String friendlyApiError(Object error) {
       case 403:
         return 'You are not allowed to perform this action.';
       case 404:
+        // 404 on a write to /master/rotate almost always means the dev backend
+        // is on an older revision that doesn't have the route registered yet.
+        // Surface that explicitly so the user doesn't try to "fix" their
+        // password.
+        final path = error.requestOptions.path;
+        if (path.contains('/master/rotate')) {
+          return 'Server is missing the change-password route. Restart your '
+              'backend on the latest commit and try again.';
+        }
         return 'Requested resource was not found.';
       case 409:
         return 'Conflict detected. Please refresh and try again.';

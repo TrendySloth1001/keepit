@@ -22,6 +22,7 @@ export interface ShareDto {
   wrappedKey: string;
   permission: string;
   createdAt: string;
+  expiresAt: string | null;
 }
 
 interface ShareRow {
@@ -35,6 +36,7 @@ interface ShareRow {
   wrappedKey: Uint8Array | Buffer;
   permission: string;
   createdAt: Date;
+  expiresAt: Date | null;
   owner: { name: string; email: string };
   recipient: { email: string };
 }
@@ -54,6 +56,7 @@ function toDto(s: ShareRow): ShareDto {
     wrappedKey: Buffer.from(s.wrappedKey).toString("base64"),
     permission: s.permission,
     createdAt: s.createdAt.toISOString(),
+    expiresAt: s.expiresAt ? s.expiresAt.toISOString() : null,
   };
 }
 
@@ -131,6 +134,10 @@ export async function createShare(ownerId: string, input: CreateShareInput) {
     );
   }
 
+  const expiresAt = input.expiresInDays
+    ? new Date(Date.now() + input.expiresInDays * 24 * 60 * 60 * 1000)
+    : null;
+
   const created = await prisma.vaultShare.create({
     data: {
       ownerId,
@@ -141,6 +148,7 @@ export async function createShare(ownerId: string, input: CreateShareInput) {
       cipherIv: Buffer.from(input.cipherIv, "base64"),
       wrappedKey: Buffer.from(input.wrappedKey, "base64"),
       permission: input.permission,
+      expiresAt,
     },
     include: {
       owner: { select: { name: true, email: true } },
@@ -150,12 +158,17 @@ export async function createShare(ownerId: string, input: CreateShareInput) {
   return toDto(created);
 }
 
-/// Lists shares received by the requesting user. The handler enforces that
-/// `recipientId === userId`, so the wrappedKey can only ever be returned to
-/// the principal who can actually decrypt it.
+/// Lists shares received by the requesting user. Filters out revoked AND
+/// expired rows in a single SQL pass — no follow-up query, no N+1, and the
+/// (recipientId, revokedAt, expiresAt, createdAt DESC) index covers the scan.
 export async function listReceivedShares(userId: string) {
+  const now = new Date();
   const rows = await prisma.vaultShare.findMany({
-    where: { recipientId: userId, revokedAt: null },
+    where: {
+      recipientId: userId,
+      revokedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
     orderBy: { createdAt: "desc" },
     include: {
       owner: { select: { name: true, email: true } },
@@ -167,8 +180,13 @@ export async function listReceivedShares(userId: string) {
 }
 
 export async function listSentShares(userId: string) {
+  const now = new Date();
   const rows = await prisma.vaultShare.findMany({
-    where: { ownerId: userId, revokedAt: null },
+    where: {
+      ownerId: userId,
+      revokedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
     orderBy: { createdAt: "desc" },
     include: {
       owner: { select: { name: true, email: true } },

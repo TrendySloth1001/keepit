@@ -80,12 +80,16 @@ model VaultShare {
 
   createdAt       DateTime @default(now())
   revokedAt       DateTime?
+  // Optional auto-revoke timestamp. listReceived/listSent filter
+  // `expiresAt is null OR expiresAt > now()` so expired rows disappear from
+  // either side without a separate sweep job.
+  expiresAt       DateTime?
 
   owner           User     @relation("SharesSent", fields: [ownerId], references: [id], onDelete: Cascade)
   recipient       User     @relation("SharesReceived", fields: [recipientId], references: [id], onDelete: Cascade)
 
-  @@index([recipientId, revokedAt, createdAt(sort: Desc)])
-  @@index([ownerId, createdAt(sort: Desc)])
+  @@index([recipientId, revokedAt, expiresAt, createdAt(sort: Desc)])
+  @@index([ownerId, expiresAt, createdAt(sort: Desc)])
 }
 
 model PrivacyPolicy {

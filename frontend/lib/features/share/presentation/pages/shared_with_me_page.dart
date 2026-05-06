@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme/app_theme.dart';
 import '../../../../app/theme/tokens.dart';
-import '../../../../shared/network/api_error.dart';
 import '../../../../shared/utils/format.dart';
 import '../../../../shared/widgets/app_snack.dart';
 import '../../../../shared/widgets/empty_state.dart';
@@ -11,6 +11,7 @@ import '../../../../shared/widgets/inline_message.dart';
 import '../../../../shared/widgets/keepit_app_bar.dart';
 import '../../../../shared/widgets/shimmer_box.dart';
 import '../../../vault/data/icon_catalog.dart';
+import '../../../vault/data/vault_models.dart';
 import '../../data/share_models.dart';
 import '../share_notifier.dart';
 
@@ -140,7 +141,7 @@ class _ShareList extends ConsumerWidget {
         title: incoming ? 'Nothing shared with you yet' : 'Nothing shared yet',
         message: incoming
             ? 'When someone shares an item with your email, it will appear here.'
-            : 'Open any password or key and tap the share icon.',
+            : 'Open any password, key, file or image and tap the share icon.',
       );
     }
     return RefreshIndicator(
@@ -172,31 +173,6 @@ class _ShareCard extends ConsumerStatefulWidget {
 }
 
 class _ShareCardState extends ConsumerState<_ShareCard> {
-  bool _opening = false;
-  Map<String, dynamic>? _decrypted;
-
-  Future<void> _open() async {
-    if (!widget.incoming) return;
-    setState(() => _opening = true);
-    try {
-      final payload =
-          await ref.read(shareProvider.notifier).openReceived(widget.item);
-      if (!mounted) return;
-      setState(() {
-        _decrypted = payload;
-        _opening = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _opening = false);
-      showAppSnack(
-        context,
-        'Could not open: ${friendlyApiError(e)}',
-        kind: AppSnackKind.error,
-      );
-    }
-  }
-
   Future<void> _revoke() async {
     await ref.read(shareProvider.notifier).revoke(widget.item);
     if (mounted) {
@@ -204,16 +180,30 @@ class _ShareCardState extends ConsumerState<_ShareCard> {
     }
   }
 
+  String get _typeLabel => switch (widget.item.type) {
+        VaultItemType.password => 'Password',
+        VaultItemType.note => 'Note',
+        VaultItemType.key => 'Key',
+        VaultItemType.file => 'File',
+        VaultItemType.image => 'Image',
+      };
+
   @override
   Widget build(BuildContext context) {
     final i = widget.item;
     final iconKey = IconCatalog.guessFromTitle(i.title).key;
+    final partyLabel = widget.incoming
+        ? 'From ${i.ownerName.isEmpty ? i.ownerEmail : i.ownerName}'
+        : 'To ${i.recipientEmail}';
 
     return Material(
       color: AppTheme.surface,
       borderRadius: BorderRadius.circular(AppRadius.lg),
       child: InkWell(
-        onTap: widget.incoming ? _open : null,
+        onTap: () => context.push(
+          '/vault/shared/view',
+          extra: SharedItemViewArgs(item: i, incoming: widget.incoming),
+        ),
         borderRadius: BorderRadius.circular(AppRadius.lg),
         child: Ink(
           decoration: BoxDecoration(
@@ -221,87 +211,78 @@ class _ShareCardState extends ConsumerState<_ShareCard> {
             border: Border.all(color: AppTheme.hairline),
           ),
           padding: const EdgeInsets.all(AppSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Row(
-                children: [
-                  VaultIcon(iconKey: iconKey, size: 44),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              VaultIcon(iconKey: iconKey, size: 48, iconSize: 24),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      i.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppTheme.fg,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      partyLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppTheme.muted,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
                       children: [
-                        Text(
-                          i.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppTheme.fg,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                          ),
+                        _Chip(label: _typeLabel),
+                        _Chip(
+                          label: 'Shared ${formatRelativeTime(i.createdAt)}',
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          widget.incoming
-                              ? 'Shared by ${i.ownerName.isEmpty ? i.ownerEmail : i.ownerName}'
-                              : 'Shared with ${i.recipientEmail}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppTheme.muted,
-                            fontSize: 12,
-                          ),
+                        _Chip(
+                          icon: i.canEdit
+                              ? Icons.edit_outlined
+                              : Icons.visibility_outlined,
+                          label: i.canEdit ? 'Can edit' : 'View only',
                         ),
-                        Text(
-                          'Shared ${formatRelativeTime(i.createdAt)}',
-                          style: const TextStyle(
-                            color: AppTheme.muted,
-                            fontSize: 12,
+                        if (i.expiresAt != null)
+                          _Chip(
+                            icon: Icons.timer_outlined,
+                            label: i.isExpired
+                                ? 'Expired'
+                                : 'Revokes in ${formatCountdown(i.expiresAt!)}',
+                            tone: i.isExpired
+                                ? _ChipTone.danger
+                                : _ChipTone.warning,
                           ),
-                        ),
                       ],
                     ),
-                  ),
-                  PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert, color: AppTheme.muted),
-                    onSelected: (v) {
-                      if (v == 'revoke') _revoke();
-                    },
-                    itemBuilder: (_) => [
-                      PopupMenuItem(
-                        value: 'revoke',
-                        child: Text(widget.incoming ? 'Remove' : 'Revoke'),
-                      ),
-                    ],
+                  ],
+                ),
+              ),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert, color: AppTheme.muted),
+                onSelected: (v) {
+                  if (v == 'revoke') _revoke();
+                },
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'revoke',
+                    child: Text(widget.incoming ? 'Remove' : 'Revoke'),
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.sm),
-              Row(
-                children: [
-                  _MiniChip(
-                    icon: i.canEdit
-                        ? Icons.edit_outlined
-                        : Icons.visibility_outlined,
-                    label: i.canEdit ? 'Can Edit' : 'View Only',
-                  ),
-                  const SizedBox(width: 6),
-                  _MiniChip(
-                    icon: Icons.lock_outline,
-                    label: 'End-to-end encrypted',
-                  ),
-                ],
-              ),
-              if (_opening) ...[
-                const SizedBox(height: AppSpacing.md),
-                const LinearProgressIndicator(minHeight: 2),
-              ],
-              if (_decrypted != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                _DecryptedPreview(payload: _decrypted!, type: i.type),
-              ],
             ],
           ),
         ),
@@ -310,87 +291,49 @@ class _ShareCardState extends ConsumerState<_ShareCard> {
   }
 }
 
-class _MiniChip extends StatelessWidget {
-  const _MiniChip({required this.icon, required this.label});
-  final IconData icon;
+enum _ChipTone { neutral, warning, danger }
+
+class _Chip extends StatelessWidget {
+  const _Chip({required this.label, this.icon, this.tone = _ChipTone.neutral});
   final String label;
+  final IconData? icon;
+  final _ChipTone tone;
+
   @override
   Widget build(BuildContext context) {
+    final colors = switch (tone) {
+      _ChipTone.warning => (
+          bg: AppTheme.warning.withValues(alpha: 0.14),
+          fg: AppTheme.warning,
+        ),
+      _ChipTone.danger => (
+          bg: AppTheme.error.withValues(alpha: 0.14),
+          fg: AppTheme.error,
+        ),
+      _ => (bg: AppTheme.surfaceAlt, fg: AppTheme.muted),
+    };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceAlt,
+        color: colors.bg,
         borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: AppTheme.hairline),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: AppTheme.fg),
-          const SizedBox(width: 4),
+          if (icon != null) ...[
+            Icon(icon, size: 11, color: colors.fg),
+            const SizedBox(width: 4),
+          ],
           Text(
             label,
-            style: const TextStyle(
-              color: AppTheme.fg,
-              fontWeight: FontWeight.w600,
+            style: TextStyle(
+              color: colors.fg,
               fontSize: 11,
+              fontWeight: FontWeight.w600,
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DecryptedPreview extends StatelessWidget {
-  const _DecryptedPreview({required this.payload, required this.type});
-  final Map<String, dynamic> payload;
-  final dynamic type;
-
-  @override
-  Widget build(BuildContext context) {
-    final entries = payload.entries
-        .where((e) => e.value != null && '${e.value}'.isNotEmpty)
-        .toList();
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppTheme.heroGreen,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final e in entries)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 84,
-                    child: Text(
-                      e.key,
-                      style: const TextStyle(
-                        color: AppTheme.muted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: SelectableText(
-                      '${e.value}',
-                      style: const TextStyle(
-                        color: AppTheme.fg,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
         ],
       ),
     );

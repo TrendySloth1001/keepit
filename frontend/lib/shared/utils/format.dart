@@ -17,3 +17,22 @@ String formatRelativeTime(DateTime then) {
   if (delta.inDays < 365) return '${(delta.inDays / 30).floor()}mo ago';
   return '${(delta.inDays / 365).floor()}y ago';
 }
+
+/// Compact countdown until [target]. Returns "Expired" once the moment has
+/// passed so callers can render a single string without branching.
+String formatCountdown(DateTime target) {
+  final delta = target.difference(DateTime.now());
+  if (delta.isNegative) return 'Expired';
+  if (delta.inDays >= 1) {
+    final days = delta.inDays;
+    final hours = delta.inHours - days * 24;
+    return hours == 0 ? '${days}d' : '${days}d ${hours}h';
+  }
+  if (delta.inHours >= 1) {
+    final hours = delta.inHours;
+    final mins = delta.inMinutes - hours * 60;
+    return mins == 0 ? '${hours}h' : '${hours}h ${mins}m';
+  }
+  if (delta.inMinutes >= 1) return '${delta.inMinutes}m';
+  return '${delta.inSeconds}s';
+}

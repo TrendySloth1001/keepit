@@ -8,7 +8,9 @@ import '../../../../shared/widgets/empty_state.dart';
 import '../../../../shared/widgets/inline_message.dart';
 import '../../../../shared/widgets/shimmer_box.dart';
 import '../../../auth/presentation/auth_notifier.dart';
+import '../../../share/data/share_models.dart';
 import '../../../share/presentation/share_notifier.dart';
+import '../../../share/presentation/widgets/shared_item_tile.dart';
 import '../../data/vault_models.dart';
 import '../storage_notifier.dart';
 import '../vault_notifier.dart';
@@ -93,6 +95,29 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
     }
   }
 
+  void _openShared(SharedItem item) {
+    context.push(
+      '/vault/shared/view',
+      extra: SharedItemViewArgs(item: item, incoming: true),
+    );
+  }
+
+  List<SharedItem> _filterShared(
+    List<SharedItem> items,
+    VaultItemType? typeFilter,
+    String search,
+  ) {
+    var filtered = items;
+    if (typeFilter != null) {
+      filtered = filtered.where((i) => i.type == typeFilter).toList();
+    }
+    if (search.trim().isEmpty) return filtered;
+    final q = search.toLowerCase();
+    return filtered
+        .where((i) => i.title.toLowerCase().contains(q))
+        .toList();
+  }
+
   String _greeting() {
     final hour = DateTime.now().hour;
     if (hour < 12) return 'Good morning';
@@ -104,8 +129,12 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
   Widget build(BuildContext context) {
     final state = ref.watch(vaultProvider);
     final notifier = ref.read(vaultProvider.notifier);
+    final shareState = ref.watch(shareProvider);
     final user = ref.watch(authProvider).user;
     final firstName = (user?.name ?? '').split(' ').first;
+    final sharedItems =
+      _filterShared(shareState.received, state.typeFilter, state.search);
+    final totalVisible = state.visibleItems.length + sharedItems.length;
 
     return AutoLockScope(
       child: Scaffold(
@@ -182,14 +211,14 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
                   title: state.typeFilter == null
                       ? 'All items'
                       : 'Filtered items',
-                  subtitle: '${state.visibleItems.length} entries',
+                  subtitle: '$totalVisible entries',
                 ),
-                if (state.isLoading)
+                if (state.isLoading && sharedItems.isEmpty)
                   const SliverFillRemaining(
                     hasScrollBody: false,
                     child: ShimmerCentered(),
                   )
-                else if (state.visibleItems.isEmpty)
+                else if (totalVisible == 0)
                   SliverFillRemaining(
                     hasScrollBody: false,
                     child: Padding(
@@ -215,12 +244,20 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
                     ),
                     sliver: SliverList.separated(
                       itemCount:
-                          state.visibleItems.length + (state.isPaging ? 1 : 0),
+                          totalVisible + (state.isPaging ? 1 : 0),
                       separatorBuilder: (_, _) =>
                           const SizedBox(height: AppSpacing.sm),
                       itemBuilder: (_, i) {
+                        if (i < sharedItems.length) {
+                          final shared = sharedItems[i];
+                          return SharedItemTile(
+                            item: shared,
+                            onTap: () => _openShared(shared),
+                          );
+                        }
                         final items = state.visibleItems;
-                        if (i >= items.length) {
+                        final idx = i - sharedItems.length;
+                        if (idx >= items.length) {
                           return const Padding(
                             padding: EdgeInsets.all(AppSpacing.lg),
                             child: Center(
@@ -232,7 +269,7 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
                             ),
                           );
                         }
-                        final item = items[i];
+                        final item = items[idx];
                         return VaultItemTile(
                           item: item,
                           onTap: () => _onTap(item),

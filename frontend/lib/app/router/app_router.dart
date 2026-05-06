@@ -14,6 +14,8 @@ import '../../features/settings/export_data_page.dart';
 import '../../features/settings/help_page.dart';
 import '../../features/settings/privacy_settings_page.dart';
 import '../../features/settings/settings_page.dart';
+import '../../features/share/data/share_models.dart';
+import '../../features/share/presentation/pages/shared_item_viewer.dart';
 import '../../features/share/presentation/pages/shared_with_me_page.dart';
 import '../../features/vault/data/vault_models.dart';
 import '../../features/vault/presentation/pages/vault_file_viewer.dart';
@@ -97,6 +99,16 @@ GoRouter buildAppRouter(Ref ref) {
       GoRoute(
         path: '/vault/shared',
         builder: (_, _) => const SharedWithMePage(),
+      ),
+      GoRoute(
+        path: '/vault/shared/view',
+        builder: (_, state) {
+          final args = state.extra! as SharedItemViewArgs;
+          return SharedItemViewer(
+            item: args.item,
+            incoming: args.incoming,
+          );
+        },
       ),
       GoRoute(
         path: '/vault/view',

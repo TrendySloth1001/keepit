@@ -6,12 +6,15 @@ import '../../../../app/theme/app_theme.dart';
 import '../../../../app/theme/tokens.dart';
 import '../../../../shared/network/api_error.dart';
 import '../../../../shared/utils/clipboard.dart';
+import '../../../../shared/utils/format.dart';
 import '../../../../shared/widgets/app_button.dart';
 import '../../../../shared/widgets/app_snack.dart';
 import '../../../../shared/widgets/confirm_dialog.dart';
 import '../../../../shared/widgets/inline_message.dart';
 import '../../../../shared/widgets/keepit_app_bar.dart';
 import '../../../../shared/widgets/shimmer_box.dart';
+import '../../../share/data/share_models.dart';
+import '../../../share/presentation/share_notifier.dart';
 import '../../../share/presentation/widgets/share_dialog.dart';
 import '../../data/icon_catalog.dart';
 import '../../data/vault_models.dart';
@@ -30,6 +33,7 @@ class _VaultItemViewerState extends ConsumerState<VaultItemViewer> {
   bool _loading = true;
   String? _error;
   bool _reveal = false;
+  final Set<int> _extraRevealed = {};
 
   @override
   void initState() {
@@ -45,8 +49,7 @@ class _VaultItemViewerState extends ConsumerState<VaultItemViewer> {
           .read(vaultProvider)
           .items
           .firstWhere((i) => i.id == widget.item.id, orElse: () => widget.item);
-      final payload =
-          await ref.read(vaultProvider.notifier).decrypt(fresh);
+      final payload = await ref.read(vaultProvider.notifier).decrypt(fresh);
       if (!mounted) return;
       setState(() {
         _decrypted = payload;
@@ -126,12 +129,12 @@ class _VaultItemViewerState extends ConsumerState<VaultItemViewer> {
   }
 
   String _typeLabel(VaultItemType t) => switch (t) {
-        VaultItemType.password => 'Password',
-        VaultItemType.note => 'Note',
-        VaultItemType.key => 'Key',
-        VaultItemType.file => 'File',
-        VaultItemType.image => 'Image',
-      };
+    VaultItemType.password => 'Password',
+    VaultItemType.note => 'Note',
+    VaultItemType.key => 'Key',
+    VaultItemType.file => 'File',
+    VaultItemType.image => 'Image',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -209,6 +212,7 @@ class _VaultItemViewerState extends ConsumerState<VaultItemViewer> {
 
   List<Widget> _passwordBody(VaultItem live, PasswordPayload p) {
     final iconKey = p.iconKey ?? IconCatalog.guessFromTitle(live.title).key;
+    final shared = _sentSharesFor(live);
     return [
       _Hero(
         iconKey: iconKey,
@@ -252,33 +256,72 @@ class _VaultItemViewerState extends ConsumerState<VaultItemViewer> {
         const SizedBox(height: AppSpacing.md),
         _NotesCard(text: p.notes!),
       ],
+      if (p.extras.isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.md),
+        _FieldCard(
+          children: [
+            for (var i = 0; i < p.extras.length; i++) ...[
+              _ReadField(
+                label: _extraLabel(p.extras[i]),
+                value: p.extras[i].value,
+                isSecret: p.extras[i].kind.isSecret,
+                revealed: _extraRevealed.contains(i),
+                onToggleReveal: p.extras[i].kind.isSecret
+                    ? () => setState(() {
+                        if (_extraRevealed.contains(i)) {
+                          _extraRevealed.remove(i);
+                        } else {
+                          _extraRevealed.add(i);
+                        }
+                      })
+                    : null,
+                onCopy: () => _copy(p.extras[i].value, p.extras[i].kind.label),
+                monospace: p.extras[i].kind.isSecret,
+              ),
+              if (i != p.extras.length - 1) const _Divider(),
+            ],
+          ],
+        ),
+      ],
+      if (shared.isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.md),
+        _SharedWithCard(shares: shared),
+      ],
       const SizedBox(height: AppSpacing.md),
       _MetaRow(item: live),
     ];
   }
 
   List<Widget> _noteBody(VaultItem live, NotePayload p) {
+    final iconKey = p.iconKey ?? IconCatalog.guessFromTitle(live.title).key;
+    final shared = _sentSharesFor(live);
     return [
       _Hero(
-        iconKey: 'note',
+        iconKey: iconKey,
         title: live.title,
         subtitle: 'Encrypted note',
         category: null,
       ),
       const SizedBox(height: AppSpacing.lg),
       _NotesCard(text: p.body.isEmpty ? '(empty)' : p.body),
+      if (shared.isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.md),
+        _SharedWithCard(shares: shared),
+      ],
       const SizedBox(height: AppSpacing.md),
       _MetaRow(item: live),
     ];
   }
 
   List<Widget> _keyBody(VaultItem live, KeyPayload p) {
-    final iconKey = p.iconKey ??
+    final iconKey =
+        p.iconKey ??
         () {
           final fromTitle = IconCatalog.guessFromTitle(live.title);
           if (fromTitle.key != 'generic') return fromTitle.key;
           return 'api_key';
         }();
+    final shared = _sentSharesFor(live);
     return [
       _Hero(
         iconKey: iconKey,
@@ -303,9 +346,99 @@ class _VaultItemViewerState extends ConsumerState<VaultItemViewer> {
         const SizedBox(height: AppSpacing.md),
         _NotesCard(text: p.notes!),
       ],
+      if (shared.isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.md),
+        _SharedWithCard(shares: shared),
+      ],
       const SizedBox(height: AppSpacing.md),
       _MetaRow(item: live),
     ];
+  }
+
+  String _extraLabel(PasswordExtraField field) {
+    final base = field.label.isEmpty ? field.kind.label : field.label;
+    return field.label.isEmpty ? base : '$base · ${field.kind.label}';
+  }
+
+  List<SharedItem> _sentSharesFor(VaultItem live) {
+    final sent = ref.watch(shareProvider).sent;
+    return sent
+        .where((s) => s.type == live.type && s.title == live.title)
+        .toList();
+  }
+}
+
+class _SharedWithCard extends StatelessWidget {
+  const _SharedWithCard({required this.shares});
+  final List<SharedItem> shares;
+
+  @override
+  Widget build(BuildContext context) {
+    final recipients = shares.map((s) => s.recipientEmail).toSet().toList();
+    recipients.sort();
+    final lastShared = shares
+        .map((s) => s.createdAt)
+        .reduce((a, b) => a.isAfter(b) ? a : b);
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppTheme.hairline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.share_outlined, size: 16, color: AppTheme.muted),
+              const SizedBox(width: 6),
+              const Text(
+                'SHARED WITH',
+                style: TextStyle(
+                  color: AppTheme.muted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                'Last shared ${formatRelativeTime(lastShared)}',
+                style: const TextStyle(color: AppTheme.muted, fontSize: 11),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final email in recipients)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceAlt,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    border: Border.all(color: AppTheme.hairline),
+                  ),
+                  child: Text(
+                    email,
+                    style: const TextStyle(
+                      color: AppTheme.fg,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -357,24 +490,38 @@ class _Hero extends StatelessWidget {
                 ),
                 if ((category ?? '').isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                      border: Border.all(color: AppTheme.hairline),
-                    ),
-                    child: Text(
-                      category!,
-                      style: const TextStyle(
-                        color: AppTheme.primaryDark,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                  // Comma-separated tokens render as individual pills so users
+                  // can tag with multiple keywords ("work, key, private") and
+                  // still scan them at a glance.
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final token in category!
+                          .split(',')
+                          .map((t) => t.trim())
+                          .where((t) => t.isNotEmpty))
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius:
+                                BorderRadius.circular(AppRadius.pill),
+                            border: Border.all(color: AppTheme.hairline),
+                          ),
+                          child: Text(
+                            token,
+                            style: const TextStyle(
+                              color: AppTheme.primaryDark,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ],
@@ -615,4 +762,3 @@ class _EditBar extends StatelessWidget {
     );
   }
 }
-
