@@ -28,6 +28,9 @@ export const listVaultItemsSchema = z.object({
   sort: z.enum(["updated_desc", "updated_asc", "created_desc", "created_asc", "title_asc", "title_desc"]).default("updated_desc"),
   cursor: z.string().cuid().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
+  // Folder filter. A cuid filters to that folder; the literal "none" filters
+  // to items with no folder (uncategorized). Undefined returns all items.
+  folderId: z.union([z.string().cuid(), z.literal("none")]).optional(),
 });
 export type ListVaultItemsInput = z.infer<typeof listVaultItemsSchema>;
 
@@ -57,6 +60,8 @@ export const updateVaultItemSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   cipherBlob: base64Bytes.optional(),
   cipherIv: base64Bytes.optional(),
+  // null clears the folder link; undefined leaves it untouched.
+  folderId: z.string().cuid().nullable().optional(),
 });
 export type UpdateVaultItemInput = z.infer<typeof updateVaultItemSchema>;
 

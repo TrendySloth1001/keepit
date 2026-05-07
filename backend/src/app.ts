@@ -5,6 +5,7 @@ import morgan from "morgan";
 import { HTTP_STATUS } from "./constants/http-status";
 import { errorHandler, notFoundHandler } from "./shared/error-handler";
 import { authRouter } from "./features/auth/auth.route";
+import { folderRouter } from "./features/folder/folder.route";
 import { privacyPolicyRouter } from "./features/privacy-policy/privacy-policy.route";
 import { shareRouter } from "./features/share/share.route";
 import { vaultRouter } from "./features/vault/vault.route";
@@ -30,6 +31,7 @@ app.get("/health", (_req, res) => {
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/privacy-policy", privacyPolicyRouter);
 app.use("/api/v1/vault", vaultRouter);
+app.use("/api/v1/folders", folderRouter);
 app.use("/api/v1/shares", shareRouter);
 
 app.use(notFoundHandler);

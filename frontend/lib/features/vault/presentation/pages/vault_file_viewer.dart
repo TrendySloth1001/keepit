@@ -5,10 +5,12 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../../app/theme/app_theme.dart';
 import '../../../../app/theme/tokens.dart';
+import '../../../../shared/crypto/vault_crypto.dart';
 import '../../../../shared/network/api_error.dart';
 import '../../../../shared/utils/format.dart';
 import '../../../../shared/widgets/app_button.dart';
@@ -17,9 +19,15 @@ import '../../../../shared/widgets/confirm_dialog.dart';
 import '../../../../shared/widgets/inline_message.dart';
 import '../../../../shared/widgets/keepit_app_bar.dart';
 import '../../../../shared/widgets/shimmer_box.dart';
+import '../../../auth/presentation/auth_notifier.dart';
+import '../../../share/data/share_models.dart';
+import '../../../share/presentation/share_notifier.dart';
+import '../../../folder/presentation/folder_notifier.dart';
+import '../../../folder/presentation/widgets/folder_picker_sheet.dart';
 import '../../../share/presentation/widgets/share_dialog.dart';
 import '../../data/icon_catalog.dart';
 import '../../data/vault_models.dart';
+import '../../data/vault_repository.dart';
 import '../storage_notifier.dart';
 import '../vault_notifier.dart';
 
@@ -36,6 +44,8 @@ class _VaultFileViewerState extends ConsumerState<VaultFileViewer> {
   String? _filename;
   String? _mime;
   String? _iconKey;
+  String? _fileIvBase64;
+  String? _fileKeyBase64;
   bool _isLoading = true;
   String? _error;
 
@@ -52,6 +62,8 @@ class _VaultFileViewerState extends ConsumerState<VaultFileViewer> {
         .firstWhere((i) => i.id == widget.item.id, orElse: () => widget.item);
   }
 
+  bool _isUnrecoverable = false;
+
   Future<void> _bootstrap() async {
     try {
       final result =
@@ -62,15 +74,64 @@ class _VaultFileViewerState extends ConsumerState<VaultFileViewer> {
         _filename = result.filename;
         _mime = result.mime;
         _iconKey = result.iconKey;
+        _fileIvBase64 = result.fileIvBase64;
+        _fileKeyBase64 = result.fileKeyBase64;
         _isLoading = false;
       });
     } catch (e) {
       if (mounted) {
+        // A MAC mismatch means the body is sealed to a key we no longer have
+        // (typically: legacy item that survived a master-password rotation
+        // without its body being migrated). The bytes are unrecoverable —
+        // surface a delete affordance so the user can clean the row up.
+        final raw = e.toString();
+        final unrecoverable = raw.contains('SecretBoxAuthenticationError') ||
+            raw.contains('wrong message authentication code') ||
+            raw.contains('MAC');
         setState(() {
           _isLoading = false;
-          _error = 'Failed to decrypt: ${friendlyApiError(e)}';
+          _isUnrecoverable = unrecoverable;
+          _error = unrecoverable
+              ? 'This file cannot be decrypted with your current master '
+                  'password. It was likely sealed under a previous password '
+                  'and the encrypted body was never migrated. The bytes are '
+                  'no longer recoverable — you can remove this entry from '
+                  'your vault to free its storage.'
+              : 'Failed to decrypt: ${friendlyApiError(e)}';
         });
       }
+    }
+  }
+
+  /// Writes the decrypted bytes to a temp file and asks the OS to open it
+  /// with whichever installed app handles its mime/extension. The file lives
+  /// in the app sandbox tmp dir; the OS removes it eventually but we don't
+  /// proactively clean up — re-opening should hit the same path.
+  Future<void> _openExternally() async {
+    if (_bytes == null || _filename == null) return;
+    try {
+      final dir = await getTemporaryDirectory();
+      final path = '${dir.path}/$_filename';
+      final file = File(path);
+      await file.writeAsBytes(_bytes!, flush: true);
+      final result = await OpenFilex.open(path, type: _mime);
+      if (!mounted) return;
+      if (result.type != ResultType.done) {
+        showAppSnack(
+          context,
+          result.message.isEmpty
+              ? 'No installed app can open this file type.'
+              : result.message,
+          kind: AppSnackKind.error,
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      showAppSnack(
+        context,
+        'Open failed: ${friendlyApiError(e)}',
+        kind: AppSnackKind.error,
+      );
     }
   }
 
@@ -130,22 +191,119 @@ class _VaultFileViewerState extends ConsumerState<VaultFileViewer> {
     }
   }
 
-  void _share() {
+  Future<void> _moveToFolder() async {
+    final live = _live();
+    final picked = await showFolderPickerSheet(
+      context,
+      currentFolderId: live.folderId,
+    );
+    if (picked == null || !mounted) return;
+    final newFolderId = picked.isEmpty ? null : picked;
+    if (newFolderId == live.folderId) return;
+    try {
+      await ref.read(vaultProvider.notifier).moveToFolder(live, newFolderId);
+      ref.read(folderProvider.notifier).bumpItemCount(live.folderId, -1);
+      ref.read(folderProvider.notifier).bumpItemCount(newFolderId, 1);
+      if (!mounted) return;
+      showAppSnack(context, 'Moved', kind: AppSnackKind.success);
+    } catch (e) {
+      if (!mounted) return;
+      showAppSnack(
+        context,
+        'Move failed: ${friendlyApiError(e)}',
+        kind: AppSnackKind.error,
+      );
+    }
+  }
+
+  Future<void> _share() async {
     if (_bytes == null) return;
     final live = _live();
-    // For file/image we inline the bytes (base64) into the share payload so
-    // the recipient never has to call our storage API. The express body cap
-    // is 24mb, which fits an encrypted file up to ~16MB.
+
+    // Share-by-reference: the encrypted body stays on our storage; we only
+    // seal a small payload (filename, mime, per-file DEK + IV) to the
+    // recipient so they can pull the body via /shares/:id/content. For
+    // legacy items uploaded before per-file DEKs, we migrate the body to a
+    // fresh DEK on the fly so we never share a master-bound key.
+    var fileKeyB64 = _fileKeyBase64;
+    var fileIvB64 = _fileIvBase64;
+    if (fileKeyB64 == null) {
+      try {
+        showAppSnack(context, 'Migrating to per-file key…');
+        final fileKey = VaultCrypto.randomBytes(32);
+        final reEnc = await VaultCrypto.encrypt(fileKey, _bytes!);
+        await VaultRepository.instance.rekeyBody(
+          itemId: live.id,
+          ciphertext: reEnc.ciphertext,
+        );
+        fileKeyB64 = base64Encode(fileKey);
+        fileIvB64 = base64Encode(reEnc.iv);
+        // Persist the new fileKey/fileIv into the item's metadata so future
+        // downloads find them. updateFileMeta preserves any pre-existing
+        // fileKey, so we have to inject it via a new path.
+        await _persistMigratedMeta(
+          item: live,
+          fileKeyB64: fileKeyB64,
+          fileIvB64: fileIvB64,
+        );
+        if (mounted) {
+          setState(() {
+            _fileKeyBase64 = fileKeyB64;
+            _fileIvBase64 = fileIvB64;
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          showAppSnack(
+            context,
+            'Could not prepare file for sharing: ${friendlyApiError(e)}',
+            kind: AppSnackKind.error,
+          );
+        }
+        return;
+      }
+    }
+
+    if (!mounted) return;
     showShareSheet(
       context,
       title: live.title,
       type: live.type,
+      sourceItemId: live.id,
       payload: {
         'filename': _filename ?? live.title,
         'mime': _mime ?? 'application/octet-stream',
         if (_iconKey != null) 'iconKey': _iconKey,
-        'fileBase64': base64Encode(_bytes!),
+        'fileKey': fileKeyB64,
+        'fileIv': fileIvB64,
       },
+    );
+  }
+
+  /// Writes a migrated (per-file-DEK) metadata blob back to the server so the
+  /// item is no longer in legacy format. Mirrors `updateFileMeta` but accepts
+  /// a brand-new fileKey/fileIv pair (the existing helper only preserves
+  /// what's already there).
+  Future<void> _persistMigratedMeta({
+    required VaultItem item,
+    required String fileKeyB64,
+    required String fileIvB64,
+  }) async {
+    final notifier = ref.read(vaultProvider.notifier);
+    final meta = await notifier.readFileMeta(item);
+    meta['fileKey'] = fileKeyB64;
+    meta['fileIv'] = fileIvB64;
+    final repo = VaultRepository.instance;
+    final masterKey =
+        ref.read(authProvider.notifier).masterKey;
+    if (masterKey == null) {
+      throw StateError('Vault is locked');
+    }
+    final encrypted = await VaultCrypto.encryptJson(masterKey, meta);
+    await repo.update(
+      item.id,
+      cipherBlob: encrypted.cipherBlob,
+      cipherIv: encrypted.cipherIv,
     );
   }
 
@@ -175,6 +333,18 @@ class _VaultFileViewerState extends ConsumerState<VaultFileViewer> {
         );
       }
     }
+  }
+
+  List<Widget> _sharedWithSection(VaultItem live) {
+    final sent = ref.watch(shareProvider).sent;
+    final shares = sent
+        .where((s) => s.type == live.type && s.title == live.title)
+        .toList();
+    if (shares.isEmpty) return const [];
+    return [
+      const SizedBox(height: AppSpacing.lg),
+      _FileSharedWithCard(shares: shares),
+    ];
   }
 
   Widget _buildPreview() {
@@ -230,6 +400,11 @@ class _VaultFileViewerState extends ConsumerState<VaultFileViewer> {
               onPressed: _share,
             ),
           IconButton(
+            tooltip: 'Move to folder',
+            icon: const Icon(Icons.drive_file_move_outlined),
+            onPressed: _moveToFolder,
+          ),
+          IconButton(
             tooltip: 'Delete',
             icon: const Icon(Icons.delete_outline, color: AppTheme.error),
             onPressed: _delete,
@@ -242,9 +417,23 @@ class _VaultFileViewerState extends ConsumerState<VaultFileViewer> {
           child: _isLoading
               ? const ShimmerCentered()
               : _error != null
-                  ? InlineMessage(
-                      message: _error!,
-                      kind: InlineMessageKind.error,
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        InlineMessage(
+                          message: _error!,
+                          kind: InlineMessageKind.error,
+                        ),
+                        if (_isUnrecoverable) ...[
+                          const SizedBox(height: AppSpacing.lg),
+                          AppButton(
+                            label: 'Delete broken item',
+                            icon: Icons.delete_outline,
+                            variant: AppButtonVariant.accent,
+                            onPressed: _delete,
+                          ),
+                        ],
+                      ],
                     )
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -308,14 +497,96 @@ class _VaultFileViewerState extends ConsumerState<VaultFileViewer> {
                         ),
                         const SizedBox(height: AppSpacing.lg),
                         AppButton(
+                          label: 'Open',
+                          icon: Icons.open_in_new_outlined,
+                          variant: AppButtonVariant.accent,
+                          onPressed: _openExternally,
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        AppButton(
                           label: 'Save decrypted copy',
                           icon: Icons.save_outlined,
                           variant: AppButtonVariant.secondary,
                           onPressed: _saveToDisk,
                         ),
+                        ..._sharedWithSection(live),
                       ],
                     ),
         ),
+      ),
+    );
+  }
+}
+
+class _FileSharedWithCard extends StatelessWidget {
+  const _FileSharedWithCard({required this.shares});
+  final List<SharedItem> shares;
+
+  @override
+  Widget build(BuildContext context) {
+    final recipients = shares.map((s) => s.recipientEmail).toSet().toList()
+      ..sort();
+    final lastShared = shares
+        .map((s) => s.createdAt)
+        .reduce((a, b) => a.isAfter(b) ? a : b);
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppTheme.hairline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.share_outlined, size: 16, color: AppTheme.muted),
+              const SizedBox(width: 6),
+              const Text(
+                'SHARED WITH',
+                style: TextStyle(
+                  color: AppTheme.muted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                'Last shared ${formatRelativeTime(lastShared)}',
+                style: const TextStyle(color: AppTheme.muted, fontSize: 11),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final email in recipients)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceAlt,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    border: Border.all(color: AppTheme.hairline),
+                  ),
+                  child: Text(
+                    email,
+                    style: const TextStyle(
+                      color: AppTheme.fg,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -18,6 +18,10 @@ class InitiateUploadResult {
   final int chunkSize;
 }
 
+// Sentinel for the three-state folder-move param on `update`. `_kKeep` means
+// "do not touch", null means "clear", a string means "link to this folder."
+const Object _kKeep = Object();
+
 class VaultRepository {
   VaultRepository._();
   static final instance = VaultRepository._();
@@ -28,6 +32,10 @@ class VaultRepository {
     VaultItemType? type,
     String? cursor,
     int limit = 50,
+    // null → no folder filter (show all). The literal `'none'` filters to
+    // uncategorized (folderId IS NULL); any other string filters to that
+    // folder id.
+    String? folderId,
   }) async {
     final res = await _dio.get(
       ApiConstants.vaultItems,
@@ -35,6 +43,7 @@ class VaultRepository {
         if (type != null) 'type': type.name,
         if (cursor != null) 'cursor': cursor,
         'limit': limit,
+        if (folderId != null) 'folderId': folderId,
       },
     );
     final data = Map<String, dynamic>.from(res.data['data'] as Map);
@@ -70,14 +79,21 @@ class VaultRepository {
     String? title,
     String? cipherBlob,
     String? cipherIv,
+    // Sentinel-based three-state move: omit to leave folder unchanged; pass
+    // null to clear (uncategorize); pass an id to link.
+    Object? folderId = _kKeep,
   }) async {
+    final body = <String, dynamic>{
+      if (title != null) 'title': title,
+      if (cipherBlob != null) 'cipherBlob': cipherBlob,
+      if (cipherIv != null) 'cipherIv': cipherIv,
+    };
+    if (!identical(folderId, _kKeep)) {
+      body['folderId'] = folderId; // string id or null
+    }
     final res = await _dio.patch(
       ApiConstants.vaultItem(id),
-      data: {
-        if (title != null) 'title': title,
-        if (cipherBlob != null) 'cipherBlob': cipherBlob,
-        if (cipherIv != null) 'cipherIv': cipherIv,
-      },
+      data: body,
     );
     return VaultItem.fromJson(
       Map<String, dynamic>.from(res.data['data'] as Map),
@@ -168,6 +184,27 @@ class VaultRepository {
     final res = await _dio.get(ApiConstants.vaultDownload(id));
     final data = Map<String, dynamic>.from(res.data['data'] as Map);
     return data['url'] as String;
+  }
+
+  /// Overwrites the encrypted body of an existing file/image item without
+  /// changing its id, fileSize, or metadata blob. Used by the master-password
+  /// rotation flow to migrate legacy items (master-encrypted body) to the
+  /// per-file-DEK format. Caller is responsible for separately PATCHing the
+  /// metadata blob to embed the new DEK + IV.
+  Future<void> rekeyBody({
+    required String itemId,
+    required Uint8List ciphertext,
+  }) async {
+    await _dio.post(
+      ApiConstants.vaultRekeyBody(itemId),
+      data: ciphertext,
+      options: Options(
+        headers: {
+          Headers.contentLengthHeader: ciphertext.length,
+          'content-type': 'application/octet-stream',
+        },
+      ),
+    );
   }
 
   Future<Uint8List> downloadCiphertext(String id) async {

@@ -13,6 +13,8 @@ import '../../../../shared/widgets/confirm_dialog.dart';
 import '../../../../shared/widgets/inline_message.dart';
 import '../../../../shared/widgets/keepit_app_bar.dart';
 import '../../../../shared/widgets/shimmer_box.dart';
+import '../../../folder/presentation/folder_notifier.dart';
+import '../../../folder/presentation/widgets/folder_picker_sheet.dart';
 import '../../../share/data/share_models.dart';
 import '../../../share/presentation/share_notifier.dart';
 import '../../../share/presentation/widgets/share_dialog.dart';
@@ -122,6 +124,32 @@ class _VaultItemViewerState extends ConsumerState<VaultItemViewer> {
     );
   }
 
+  Future<void> _moveToFolder() async {
+    final live = _liveItem();
+    final picked = await showFolderPickerSheet(
+      context,
+      currentFolderId: live.folderId,
+    );
+    if (picked == null || !mounted) return;
+    final newFolderId = picked.isEmpty ? null : picked;
+    if (newFolderId == live.folderId) return;
+    try {
+      await ref.read(vaultProvider.notifier).moveToFolder(live, newFolderId);
+      // Keep folder counts honest in the chip strip without a roundtrip.
+      ref.read(folderProvider.notifier).bumpItemCount(live.folderId, -1);
+      ref.read(folderProvider.notifier).bumpItemCount(newFolderId, 1);
+      if (!mounted) return;
+      showAppSnack(context, 'Moved', kind: AppSnackKind.success);
+    } catch (e) {
+      if (!mounted) return;
+      showAppSnack(
+        context,
+        'Move failed: ${friendlyApiError(e)}',
+        kind: AppSnackKind.error,
+      );
+    }
+  }
+
   Future<void> _copy(String text, String label) async {
     if (text.isEmpty) return;
     await SafeClipboard.copy(text);
@@ -150,6 +178,11 @@ class _VaultItemViewerState extends ConsumerState<VaultItemViewer> {
               icon: const Icon(Icons.ios_share_outlined),
               onPressed: _share,
             ),
+          IconButton(
+            tooltip: 'Move to folder',
+            icon: const Icon(Icons.drive_file_move_outlined),
+            onPressed: _moveToFolder,
+          ),
           IconButton(
             tooltip: 'Delete',
             icon: const Icon(Icons.delete_outline, color: AppTheme.error),

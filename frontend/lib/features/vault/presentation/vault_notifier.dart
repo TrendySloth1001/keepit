@@ -18,6 +18,7 @@ class VaultListState {
     this.cursor,
     this.hasMore = true,
     this.typeFilter,
+    this.folderFilter,
     this.search = '',
   });
 
@@ -28,6 +29,9 @@ class VaultListState {
   final String? cursor;
   final bool hasMore;
   final VaultItemType? typeFilter;
+  // null → all folders. The literal `'none'` filters to uncategorized; any
+  // other string is a specific folder id.
+  final String? folderFilter;
   final String search;
 
   /// Title-only search (titles are plaintext metadata; payloads stay encrypted).
@@ -45,6 +49,7 @@ class VaultListState {
     Object? cursor = _sentinel,
     bool? hasMore,
     Object? typeFilter = _sentinel,
+    Object? folderFilter = _sentinel,
     String? search,
   }) {
     return VaultListState(
@@ -59,6 +64,9 @@ class VaultListState {
       typeFilter: identical(typeFilter, _sentinel)
           ? this.typeFilter
           : typeFilter as VaultItemType?,
+      folderFilter: identical(folderFilter, _sentinel)
+          ? this.folderFilter
+          : folderFilter as String?,
       search: search ?? this.search,
     );
   }
@@ -85,6 +93,14 @@ class VaultNotifier extends StateNotifier<VaultListState> {
     await refresh();
   }
 
+  /// `null` clears the folder filter (all items). `'none'` shows uncategorized.
+  /// Any other string filters to a specific folder id.
+  Future<void> setFolderFilter(String? folderId) async {
+    if (state.folderFilter == folderId) return;
+    state = state.copyWith(folderFilter: folderId);
+    await refresh();
+  }
+
   void setSearch(String q) {
     state = state.copyWith(search: q);
   }
@@ -98,7 +114,10 @@ class VaultNotifier extends StateNotifier<VaultListState> {
       items: const [],
     );
     try {
-      final page = await VaultRepository.instance.list(type: state.typeFilter);
+      final page = await VaultRepository.instance.list(
+        type: state.typeFilter,
+        folderId: state.folderFilter,
+      );
       state = state.copyWith(
         items: page.items,
         cursor: page.nextCursor,
@@ -116,6 +135,7 @@ class VaultNotifier extends StateNotifier<VaultListState> {
     try {
       final page = await VaultRepository.instance.list(
         type: state.typeFilter,
+        folderId: state.folderFilter,
         cursor: state.cursor,
       );
       state = state.copyWith(
@@ -196,7 +216,9 @@ class VaultNotifier extends StateNotifier<VaultListState> {
   }
 
   /// Encrypts file bytes locally, reserves quota, uploads ciphertext, finalizes.
-  /// Metadata blob carries the file IV so we don't need a separate column.
+  /// The body is encrypted with a fresh random per-file DEK so master-password
+  /// rotation only has to re-wrap metadata — bodies stay decryptable. The DEK
+  /// itself sits inside the master-encrypted metadata blob.
   Future<VaultItem> uploadFile({
     required VaultItemType type,
     required String title,
@@ -206,14 +228,16 @@ class VaultNotifier extends StateNotifier<VaultListState> {
     String? iconKey,
     void Function(double progress)? onProgress,
   }) async {
-    final fileEncrypted = await VaultCrypto.encrypt(_key, bytes);
+    final fileKey = VaultCrypto.randomBytes(32);
+    final fileEncrypted = await VaultCrypto.encrypt(fileKey, bytes);
     final ciphertext = fileEncrypted.ciphertext;
 
     final encryptedMeta = await VaultCrypto.encryptJson(_key, {
       'filename': originalFilename,
       'mime': mime,
       'fileIv': base64Encode(fileEncrypted.iv),
-      if (iconKey != null) 'iconKey': iconKey,
+      'fileKey': base64Encode(fileKey),
+      'iconKey': ?iconKey,
     });
 
     final repo = VaultRepository.instance;
@@ -265,7 +289,10 @@ class VaultNotifier extends StateNotifier<VaultListState> {
       'filename': meta['filename'] ?? title,
       'mime': meta['mime'] ?? 'application/octet-stream',
       'fileIv': meta['fileIv'],
-      if (iconKey != null) 'iconKey': iconKey,
+      // Preserve per-file DEK across metadata edits. Legacy items (uploaded
+      // before per-file DEKs) won't have one — the body is master-encrypted.
+      if (meta['fileKey'] != null) 'fileKey': meta['fileKey'],
+      'iconKey': ?iconKey,
     });
     final updated = await repo.update(
       item.id,
@@ -277,7 +304,17 @@ class VaultNotifier extends StateNotifier<VaultListState> {
     return updated;
   }
 
-  Future<({Uint8List bytes, String filename, String mime, String? iconKey})>
+  Future<
+    ({
+      Uint8List bytes,
+      String filename,
+      String mime,
+      String? iconKey,
+      String fileIvBase64,
+      // null for legacy items whose bodies are encrypted with the master key.
+      String? fileKeyBase64,
+    })
+  >
   downloadFile(VaultItem item) async {
     final repo = VaultRepository.instance;
     final meta = await VaultCrypto.decryptJson(
@@ -286,9 +323,11 @@ class VaultNotifier extends StateNotifier<VaultListState> {
       cipherIv: item.cipherIv,
     );
     final fileIv = base64Decode(meta['fileIv'] as String);
+    final fileKeyB64 = meta['fileKey'] as String?;
+    final bodyKey = fileKeyB64 != null ? base64Decode(fileKeyB64) : _key;
     final ciphertext = await repo.downloadCiphertext(item.id);
     final plain = await VaultCrypto.decrypt(
-      masterKey: _key,
+      masterKey: bodyKey,
       ciphertext: ciphertext,
       iv: fileIv,
     );
@@ -297,14 +336,38 @@ class VaultNotifier extends StateNotifier<VaultListState> {
       filename: meta['filename'] as String? ?? 'file',
       mime: meta['mime'] as String? ?? 'application/octet-stream',
       iconKey: meta['iconKey'] as String?,
+      fileIvBase64: meta['fileIv'] as String,
+      fileKeyBase64: fileKeyB64,
     );
   }
+
+  /// Reads the metadata blob of an existing file/image item (no body fetch).
+  /// Used when sharing — we need fileKey/fileIv but not the plaintext body.
+  Future<Map<String, dynamic>> readFileMeta(VaultItem item) {
+    return VaultCrypto.decryptJson(
+      masterKey: _key,
+      cipherBlob: item.cipherBlob,
+      cipherIv: item.cipherIv,
+    );
+  }
+
 
   Future<void> delete(VaultItem item) async {
     await VaultRepository.instance.delete(item.id);
     state = state.copyWith(
       items: state.items.where((i) => i.id != item.id).toList(),
     );
+  }
+
+  /// Moves an item to [folderId] (or pass null to uncategorize). The PATCH
+  /// preserves cipherBlob/cipherIv — folders are pure organization, no re-seal.
+  Future<VaultItem> moveToFolder(VaultItem item, String? folderId) async {
+    final updated = await VaultRepository.instance.update(
+      item.id,
+      folderId: folderId,
+    );
+    _upsertLocal(updated);
+    return updated;
   }
 
   void _upsertLocal(VaultItem item) {

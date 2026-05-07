@@ -48,6 +48,7 @@ dependencies:
   local_auth: ^2.3.0
   share_plus: ^10.1.4
   url_launcher: ^6.3.2
+  open_filex: ^4.5.0
 
 dev_dependencies:
   flutter_test:

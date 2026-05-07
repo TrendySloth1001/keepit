@@ -30,6 +30,8 @@ class _ExportDataPageState extends ConsumerState<ExportDataPage> {
   int _decryptedCount = 0;
 
   Future<void> _export({required bool includeFiles}) async {
+    final accepted = await _confirmExport(includeFiles: includeFiles);
+    if (!accepted) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -71,11 +73,7 @@ class _ExportDataPageState extends ConsumerState<ExportDataPage> {
       final doc = <String, dynamic>{
         'app': 'keepit',
         'exportedAt': DateTime.now().toIso8601String(),
-        'account': {
-          'id': user?.id,
-          'email': user?.email,
-          'name': user?.name,
-        },
+        'account': {'id': user?.id, 'email': user?.email, 'name': user?.name},
         'count': entries.length,
         'items': entries,
       };
@@ -113,6 +111,143 @@ class _ExportDataPageState extends ConsumerState<ExportDataPage> {
         _error = friendlyApiError(e);
       });
     }
+  }
+
+  Future<bool> _confirmExport({required bool includeFiles}) async {
+    var accepted = false;
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: AppSpacing.lg,
+              right: AppSpacing.lg,
+              top: AppSpacing.lg,
+              bottom: AppSpacing.lg + MediaQuery.of(ctx).viewInsets.bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: const [
+                    Icon(Icons.shield_outlined, color: AppTheme.primary),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'You are exporting decrypted data',
+                        style: TextStyle(
+                          color: AppTheme.fg,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 17,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                const Text(
+                  'The file you are about to generate contains your '
+                  'passwords, notes and keys in plaintext. Once it leaves '
+                  'KeepIt, its safety is entirely up to you.',
+                  style: TextStyle(
+                    color: AppTheme.fg,
+                    fontSize: 13,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                const Text(
+                  'By continuing you agree that:',
+                  style: TextStyle(
+                    color: AppTheme.fg,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const _BulletLine(
+                  'You are solely responsible for storing and deleting this file.',
+                ),
+                const _BulletLine(
+                  'KeepIt cannot recover or revoke it once it is shared or saved off-device.',
+                ),
+                const _BulletLine(
+                  'Anyone who gets the file can read your secrets without your master password.',
+                ),
+                const SizedBox(height: AppSpacing.md),
+                InkWell(
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  onTap: () => setLocal(() => accepted = !accepted),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Checkbox(
+                          value: accepted,
+                          onChanged: (v) =>
+                              setLocal(() => accepted = v ?? false),
+                          activeColor: AppTheme.primary,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        const Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.only(top: 12),
+                            child: Text(
+                              'I understand and accept responsibility for this exported file.',
+                              style: TextStyle(
+                                color: AppTheme.fg,
+                                fontSize: 13,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(color: AppTheme.muted),
+                      ),
+                    ),
+                    const Spacer(),
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppTheme.primary,
+                        disabledBackgroundColor: AppTheme.surfaceAlt,
+                      ),
+                      onPressed: accepted
+                          ? () => Navigator.pop(ctx, true)
+                          : null,
+                      child: Text(
+                        includeFiles ? 'Export everything' : 'Export now',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    return ok == true;
   }
 
   @override
@@ -174,12 +309,6 @@ class _ExportDataPageState extends ConsumerState<ExportDataPage> {
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
-            const InlineMessage(
-              message:
-                  'The exported JSON contains decrypted secrets. Save it to an encrypted location and delete it when no longer needed.',
-              kind: InlineMessageKind.warning,
-            ),
-            const SizedBox(height: AppSpacing.lg),
             if (_error != null) ...[
               InlineMessage(message: _error!, kind: InlineMessageKind.error),
               const SizedBox(height: AppSpacing.md),
@@ -238,3 +367,33 @@ class _ExportDataPageState extends ConsumerState<ExportDataPage> {
   }
 }
 
+class _BulletLine extends StatelessWidget {
+  const _BulletLine(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 6, right: 8),
+            child: Icon(Icons.circle, size: 5, color: AppTheme.muted),
+          ),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: AppTheme.fg,
+                fontSize: 13,
+                height: 1.45,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

@@ -1,12 +1,13 @@
 import { z } from "zod";
 
-// 32MB ceiling on the base64 cipherBlob is enough to inline a ~16MB encrypted
-// file (base64 inflates ~37%) once W3.1 ships file/image sharing. Express body
-// limit must match.
+// File/image shares now reference the owner's existing encrypted body in
+// object storage instead of inlining it as base64 — so the share blob carries
+// only metadata + per-file DEK. 256 KB is generously above what we need for
+// any structured payload (passwords, notes, keys, file metadata).
 const base64 = z
   .string()
   .min(1)
-  .max(32_000_000)
+  .max(256_000)
   .regex(/^[A-Za-z0-9+/=_-]+$/, "Invalid base64 payload");
 
 export const createShareSchema = z.object({
@@ -20,6 +21,10 @@ export const createShareSchema = z.object({
   permission: z.enum(["view", "edit"]).default("view"),
   // Optional auto-expiry window in days; null/undefined means "no expiry".
   expiresInDays: z.number().int().min(1).max(365).optional(),
+  // Required for file/image shares: the owner's vault item whose encrypted
+  // body should be made available to the recipient via /shares/:id/content.
+  // Ignored for non-file types.
+  sourceItemId: z.string().min(1).max(64).optional(),
 });
 export type CreateShareInput = z.infer<typeof createShareSchema>;
 
@@ -34,3 +39,27 @@ export const publishKeypairSchema = z.object({
   privateIv: base64,
 });
 export type PublishKeypairInput = z.infer<typeof publishKeypairSchema>;
+
+// Folder-share bundle: one recipient, N pre-sealed envelopes (each like the
+// payload of POST /shares but without recipientEmail/expiresInDays — those
+// are bundle-level). 50 items per bundle is a generous ceiling that comfortably
+// fits the 36mb express.json limit even with file metadata blobs.
+const bundleItemSchema = z.object({
+  type: z.enum(["password", "note", "key", "file", "image"]),
+  title: z.string().min(1).max(200),
+  cipherBlob: base64,
+  cipherIv: base64,
+  wrappedKey: base64,
+  sourceItemId: z.string().min(1).max(64).optional(),
+});
+
+export const createBundleSchema = z.object({
+  recipientEmail: z.string().email().max(254),
+  name: z.string().trim().min(1).max(80),
+  permission: z.enum(["view", "edit"]).default("view"),
+  expiresInDays: z.number().int().min(1).max(365).optional(),
+  // Optional source folder pointer (owner-side, for the owner's own UI).
+  sourceFolderId: z.string().min(1).max(64).optional(),
+  items: z.array(bundleItemSchema).min(1).max(50),
+});
+export type CreateBundleInput = z.infer<typeof createBundleSchema>;

@@ -20,6 +20,8 @@ class ApiConstants {
       '/api/v1/vault/uploads/$itemId/chunks/$partNumber';
   static String vaultAbortUpload(String itemId) =>
       '/api/v1/vault/uploads/$itemId';
+  static String vaultRekeyBody(String itemId) =>
+      '/api/v1/vault/items/$itemId/rekey-body';
 
   static String vaultItem(String id) => '$vaultItems/$id';
   static String vaultDownload(String id) => '$vaultItems/$id/download';
@@ -32,7 +34,15 @@ class ApiConstants {
   static const String shareKeypair = '/api/v1/shares/keypair';
   static const String shareRecipientLookup =
       '/api/v1/shares/recipients/lookup';
+  static const String shareBundles = '/api/v1/shares/bundles';
   static String share(String id) => '$shares/$id';
+  static String shareCiphertext(String id) => '$shares/$id/content';
+  static String shareOpened(String id) => '$shares/$id/opened';
+  static String shareBundle(String id) => '$shareBundles/$id';
+
+  // Folders
+  static const String folders = '/api/v1/folders';
+  static String folder(String id) => '$folders/$id';
 
   /// Web/server-side Google OAuth client ID. google_sign_in needs this as
   /// `serverClientId` so it returns an idToken our backend can verify.

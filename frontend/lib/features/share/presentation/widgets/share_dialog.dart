@@ -15,11 +15,13 @@ class ShareItemSheet extends ConsumerStatefulWidget {
     required this.title,
     required this.type,
     required this.payload,
+    this.sourceItemId,
   });
 
   final String title;
   final VaultItemType type;
   final Map<String, dynamic> payload;
+  final String? sourceItemId;
 
   @override
   ConsumerState<ShareItemSheet> createState() => _ShareItemSheetState();
@@ -57,6 +59,7 @@ class _ShareItemSheetState extends ConsumerState<ShareItemSheet> {
             title: widget.title,
             payload: widget.payload,
             expiresInDays: _expiryDays,
+            sourceItemId: widget.sourceItemId,
           );
       setState(() {
         _busy = false;
@@ -238,6 +241,7 @@ Future<void> showShareSheet(
   required String title,
   required VaultItemType type,
   required Map<String, dynamic> payload,
+  String? sourceItemId,
 }) {
   return showModalBottomSheet(
     context: context,
@@ -246,6 +250,7 @@ Future<void> showShareSheet(
       title: title,
       type: type,
       payload: payload,
+      sourceItemId: sourceItemId,
     ),
   );
 }

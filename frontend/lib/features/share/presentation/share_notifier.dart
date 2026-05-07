@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/crypto/share_crypto.dart';
+import '../../../shared/crypto/vault_crypto.dart';
 import '../../../shared/network/api_error.dart';
 import '../../auth/presentation/auth_notifier.dart';
 import '../../vault/data/vault_models.dart';
@@ -91,6 +93,10 @@ class ShareNotifier extends StateNotifier<ShareState> {
     required Map<String, dynamic> payload,
     String permission = 'view',
     int? expiresInDays,
+    // For file/image shares: the owner's source vault item id. The recipient
+    // will pull the encrypted body via the share download endpoint and
+    // decrypt with the per-file DEK that's inside `payload`.
+    String? sourceItemId,
   }) async {
     final recipient = await _repo.lookup(email);
     final sealed = await ShareCrypto.sealForRecipient(
@@ -106,8 +112,36 @@ class ShareNotifier extends StateNotifier<ShareState> {
       wrappedKey: sealed.wrappedKey,
       permission: permission,
       expiresInDays: expiresInDays,
+      sourceItemId: sourceItemId,
     );
     state = state.copyWith(sent: [created, ...state.sent]);
+  }
+
+  /// Recipient-only: fetches and decrypts the body of a shared file/image.
+  /// `payload` is the already-decrypted share payload (so we have the
+  /// per-file DEK). Falls back to legacy inlined `fileBase64` if present.
+  Future<Uint8List> openSharedFileBytes({
+    required SharedItem item,
+    required Map<String, dynamic> payload,
+  }) async {
+    final inlineB64 = payload['fileBase64'] as String?;
+    if (inlineB64 != null) {
+      // Legacy share: body was inlined in the encrypted payload.
+      return Uint8List.fromList(base64Decode(inlineB64));
+    }
+    final fileKeyB64 = payload['fileKey'] as String?;
+    final fileIvB64 = payload['fileIv'] as String?;
+    if (fileKeyB64 == null || fileIvB64 == null) {
+      throw const FormatException(
+        'Share payload missing fileKey/fileIv — cannot decrypt body.',
+      );
+    }
+    final ciphertext = await _repo.downloadCiphertext(item.id);
+    return VaultCrypto.decrypt(
+      masterKey: Uint8List.fromList(base64Decode(fileKeyB64)),
+      ciphertext: ciphertext,
+      iv: Uint8List.fromList(base64Decode(fileIvB64)),
+    );
   }
 
   Future<Map<String, dynamic>> openReceived(SharedItem item) async {

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
 import '../../../constants/api_constants.dart';
@@ -52,6 +54,7 @@ class ShareRepository {
     required String wrappedKey,
     String permission = 'view',
     int? expiresInDays,
+    String? sourceItemId,
   }) async {
     final res = await _dio.post(
       ApiConstants.shares,
@@ -64,11 +67,23 @@ class ShareRepository {
         'wrappedKey': wrappedKey,
         'permission': permission,
         if (expiresInDays != null) 'expiresInDays': expiresInDays,
+        if (sourceItemId != null) 'sourceItemId': sourceItemId,
       },
     );
     return SharedItem.fromJson(
       Map<String, dynamic>.from(res.data['data'] as Map),
     );
+  }
+
+  /// Recipient-only: streams the encrypted body for a file/image share. The
+  /// per-file DEK that decrypts these bytes lives inside the (separately
+  /// encrypted) share payload — the server never sees plaintext.
+  Future<Uint8List> downloadCiphertext(String shareId) async {
+    final res = await _dio.get<List<int>>(
+      ApiConstants.shareCiphertext(shareId),
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return Uint8List.fromList(res.data!);
   }
 
   Future<List<SharedItem>> received() async {

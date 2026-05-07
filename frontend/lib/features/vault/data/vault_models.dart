@@ -15,6 +15,7 @@ class VaultItem {
     required this.fileSize,
     required this.fileMime,
     required this.uploadStatus,
+    required this.folderId,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -27,6 +28,7 @@ class VaultItem {
   final int? fileSize;
   final String? fileMime;
   final String? uploadStatus;
+  final String? folderId;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -41,6 +43,7 @@ class VaultItem {
         : int.parse(json['fileSize'] as String),
     fileMime: json['fileMime'] as String?,
     uploadStatus: json['uploadStatus'] as String?,
+    folderId: json['folderId'] as String?,
     createdAt: DateTime.parse(json['createdAt'] as String),
     updatedAt: DateTime.parse(json['updatedAt'] as String),
   );

@@ -17,6 +17,7 @@ import '../../shared/widgets/section_card.dart';
 import '../auth/data/auth_repository.dart';
 import '../auth/presentation/auth_notifier.dart';
 import '../share/data/share_repository.dart';
+import '../vault/data/vault_models.dart';
 import '../vault/data/vault_repository.dart';
 
 class ChangeMasterPasswordPage extends ConsumerStatefulWidget {
@@ -110,22 +111,88 @@ class _ChangeMasterPasswordPageState
         params: newParams,
       );
 
-      // 3) Pull every item, decrypt with OLD, re-encrypt with NEW.
+      // 3) Pull every item, re-wrap its metadata under the new master key.
+      //    For file/image items in the legacy format (body encrypted directly
+      //    with the master key, no per-file DEK in metadata) we additionally
+      //    re-encrypt the body under a fresh per-file DEK and overwrite the
+      //    server's stored ciphertext — otherwise the body would still be
+      //    bound to the old key and `downloadFile` would fail post-rotation.
       setState(() => _status = 'Re-encrypting vault items…');
       final repo = VaultRepository.instance;
       final all = <_RewrappedItem>[];
       String? cursor;
       var fetched = 0;
+      var legacyMigrated = 0;
       while (true) {
         final page = await repo.list(cursor: cursor, limit: 100);
         for (final item in page.items) {
-          final plaintext = await VaultCrypto.decrypt(
+          final plaintextMeta = await VaultCrypto.decrypt(
             masterKey: oldDerived.key,
             ciphertext: base64Decode(item.cipherBlob),
             iv: base64Decode(item.cipherIv),
           );
+          Uint8List metaToRewrap = plaintextMeta;
+
+          final isFileLike = item.type == VaultItemType.file ||
+              item.type == VaultItemType.image;
+          // Skip body migration unless the item has a fully-uploaded body on
+          // the server. Pending/uploading/failed rows have no body to rekey;
+          // calling rekey-body would 404 and abort the whole rotation.
+          final hasReadyBody = item.uploadStatus == 'ready';
+          if (isFileLike && hasReadyBody) {
+            final metaJson = jsonDecode(utf8.decode(plaintextMeta))
+                as Map<String, dynamic>;
+            if (metaJson['fileKey'] == null && metaJson['fileIv'] is String) {
+              // Legacy: body was encrypted under the master key. Migrate to
+              // per-file DEK so future rotations are body-free. We do this
+              // *before* updating the verifier on the server so a mid-flight
+              // failure leaves the user able to retry with the same password.
+              if (mounted) {
+                setState(
+                  () => _status =
+                      'Migrating file "${item.title}" to per-file key…',
+                );
+              }
+              // The body for this item is bound to the OLD master key. We
+              // MUST migrate it before re-wrapping metadata, otherwise the
+              // post-rotation download will hit a MAC error (new master key
+              // can't decrypt body that was sealed with the old one). If we
+              // can't migrate, abort the entire rotation so the user keeps
+              // working access to all their files until they fix or delete
+              // the offending row.
+              try {
+                final ciphertextOld = await repo.downloadCiphertext(item.id);
+                final fileIvOld = base64Decode(metaJson['fileIv'] as String);
+                final plainBody = await VaultCrypto.decrypt(
+                  masterKey: oldDerived.key,
+                  ciphertext: ciphertextOld,
+                  iv: fileIvOld,
+                );
+                final fileKey = VaultCrypto.randomBytes(32);
+                final reEncBody =
+                    await VaultCrypto.encrypt(fileKey, plainBody);
+                await repo.rekeyBody(
+                  itemId: item.id,
+                  ciphertext: reEncBody.ciphertext,
+                );
+                metaJson['fileKey'] = base64Encode(fileKey);
+                metaJson['fileIv'] = base64Encode(reEncBody.iv);
+                metaToRewrap =
+                    Uint8List.fromList(utf8.encode(jsonEncode(metaJson)));
+                legacyMigrated++;
+              } catch (e) {
+                throw _RotationBlockedException(
+                  'Cannot migrate "${item.title}" to the new password — '
+                  'its encrypted body is unreachable (${friendlyApiError(e)}). '
+                  'Open that item, delete it if it is broken, and try '
+                  'changing your password again.',
+                );
+              }
+            }
+          }
+
           final reEncrypted =
-              await VaultCrypto.encrypt(newDerived.key, plaintext);
+              await VaultCrypto.encrypt(newDerived.key, metaToRewrap);
           all.add(
             _RewrappedItem(
               id: item.id,
@@ -137,8 +204,10 @@ class _ChangeMasterPasswordPageState
         }
         if (mounted) {
           setState(() {
-            _progress = fetched == 0 ? 0.5 : 0.5;
-            _status = 'Re-encrypted $fetched items…';
+            _progress = 0.5;
+            _status = legacyMigrated > 0
+                ? 'Re-encrypted $fetched items (migrated $legacyMigrated files)…'
+                : 'Re-encrypted $fetched items…';
           });
         }
         if (page.nextCursor == null) break;
@@ -215,7 +284,9 @@ class _ChangeMasterPasswordPageState
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = friendlyApiError(e);
+        _error = e is _RotationBlockedException
+            ? e.message
+            : friendlyApiError(e);
         _status = null;
       });
     }
@@ -336,6 +407,13 @@ class _ChangeMasterPasswordPageState
       ),
     );
   }
+}
+
+class _RotationBlockedException implements Exception {
+  const _RotationBlockedException(this.message);
+  final String message;
+  @override
+  String toString() => message;
 }
 
 class _RewrappedItem {

@@ -15,6 +15,7 @@ import {
   getVaultItem,
   initiateUpload,
   listVaultItems,
+  rekeyVaultItemBody,
   uploadChunkForItem,
   uploadCiphertextForItem,
   updateVaultItem,
@@ -107,6 +108,19 @@ export const abortUploadCtl = asyncHandler(async (req: Request, res: Response) =
 export const downloadUrl = asyncHandler(async (req: Request, res: Response) => {
   const data = await getDownloadUrl(req.auth!.userId, req.params.id);
   res.status(HTTP_STATUS.OK).json({ success: true, data });
+});
+
+export const rekeyBodyCtl = asyncHandler(async (req: Request, res: Response) => {
+  const bytes = req.body;
+  if (!(bytes instanceof Buffer) || bytes.length === 0) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      message: "Binary request body is required",
+    });
+    return;
+  }
+  await rekeyVaultItemBody(req.auth!.userId, req.params.id, bytes);
+  res.status(HTTP_STATUS.NO_CONTENT).send();
 });
 
 export const downloadContentCtl = asyncHandler(async (req: Request, res: Response) => {

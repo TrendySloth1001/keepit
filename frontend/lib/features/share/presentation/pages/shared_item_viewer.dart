@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -37,7 +36,9 @@ class SharedItemViewer extends ConsumerStatefulWidget {
 
 class _SharedItemViewerState extends ConsumerState<SharedItemViewer> {
   Map<String, dynamic>? _payload;
+  Uint8List? _fileBytes;
   bool _loading = false;
+  bool _fetchingBody = false;
   String? _error;
   bool _reveal = false;
 
@@ -53,13 +54,38 @@ class _SharedItemViewerState extends ConsumerState<SharedItemViewer> {
       _error = null;
     });
     try {
-      final payload =
-          await ref.read(shareProvider.notifier).openReceived(widget.item);
+      final notifier = ref.read(shareProvider.notifier);
+      final payload = await notifier.openReceived(widget.item);
       if (!mounted) return;
       setState(() {
         _payload = payload;
         _loading = false;
       });
+
+      // For file/image shares we also pull the encrypted body. Legacy shares
+      // have it inlined as `fileBase64` in the payload; new shares reference
+      // the owner's vault item and stream the body via /shares/:id/content.
+      if (widget.item.type == VaultItemType.file ||
+          widget.item.type == VaultItemType.image) {
+        if (mounted) setState(() => _fetchingBody = true);
+        try {
+          final bytes = await notifier.openSharedFileBytes(
+            item: widget.item,
+            payload: payload,
+          );
+          if (!mounted) return;
+          setState(() {
+            _fileBytes = bytes;
+            _fetchingBody = false;
+          });
+        } catch (e) {
+          if (!mounted) return;
+          setState(() {
+            _fetchingBody = false;
+            _error = 'Could not load file: ${friendlyApiError(e)}';
+          });
+        }
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -99,11 +125,9 @@ class _SharedItemViewerState extends ConsumerState<SharedItemViewer> {
 
   Future<void> _saveSharedFile() async {
     final p = _payload;
-    if (p == null) return;
-    final b64 = p['fileBase64'] as String?;
-    if (b64 == null) return;
+    final bytes = _fileBytes;
+    if (p == null || bytes == null) return;
     try {
-      final bytes = base64Decode(b64);
       final filename = p['filename'] as String? ?? widget.item.title;
       final dir = await getApplicationDocumentsDirectory();
       final path = '${dir.path}/$filename';
@@ -277,26 +301,17 @@ class _SharedItemViewerState extends ConsumerState<SharedItemViewer> {
   }
 
   List<Widget> _filePayloadBody(SharedItem item, Map<String, dynamic> p) {
-    final b64 = p['fileBase64'] as String?;
     final filename = p['filename'] as String? ?? item.title;
     final mime = p['mime'] as String? ?? 'application/octet-stream';
-    if (b64 == null) {
+    final bytes = _fileBytes;
+    if (bytes == null) {
+      if (_fetchingBody) {
+        return const [ShimmerCentered()];
+      }
       return const [
         InlineMessage(
-          message: 'This share has no file payload.',
+          message: 'This share has no file body available.',
           kind: InlineMessageKind.warning,
-        ),
-      ];
-    }
-
-    Uint8List? bytes;
-    try {
-      bytes = base64Decode(b64);
-    } catch (_) {
-      return const [
-        InlineMessage(
-          message: 'File payload could not be decoded.',
-          kind: InlineMessageKind.error,
         ),
       ];
     }

@@ -44,10 +44,30 @@ model User {
 
   sessions        Session[]
   vaultItems      VaultItem[]
+  vaultFolders    VaultFolder[]
   sharesSent      VaultShare[] @relation("SharesSent")
   sharesReceived  VaultShare[] @relation("SharesReceived")
+  shareBundlesSent     VaultShareBundle[] @relation("BundlesSent")
+  shareBundlesReceived VaultShareBundle[] @relation("BundlesReceived")
 
   @@index([email])
+}
+
+/// Per-user vault folder. Plaintext name (mirrors VaultItem.title — owners
+/// already accept that titles are visible to the server). Items are linked via
+/// VaultItem.folderId; deleting a folder only nulls the link, never the items.
+model VaultFolder {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  iconKey     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items       VaultItem[]
+
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 /// An end-to-end-encrypted item share. The owner re-encrypts the item content
@@ -78,6 +98,26 @@ model VaultShare {
 
   permission      String   @default("view") // "view" | "edit" (edit reserved)
 
+  // For file/image shares: the owner's source VaultItem id. The encrypted
+  // body lives on that item; the recipient fetches it via /shares/:id/content
+  // (the per-file DEK rides inside the encrypted share payload). Null for
+  // non-file shares and for legacy shares that inlined fileBase64.
+  sourceItemId    String?
+
+  // Optional bundle membership. When set, this share is one entry in a
+  // shared folder snapshot — listed under the bundle's name in the UI and
+  // revoked together. SET NULL on bundle delete so individual share rows
+  // survive even if the bundle row is removed.
+  bundleId        String?
+
+  // Read receipts: server-tracked, not user-supplied. firstOpenedAt is set
+  // exactly once on the first decrypt; lastOpenedAt + openCount are updated
+  // on every subsequent open. File shares bump these in /shares/:id/content;
+  // non-file shares hit POST /shares/:id/opened from the client after decrypt.
+  firstOpenedAt   DateTime?
+  lastOpenedAt    DateTime?
+  openCount       Int      @default(0)
+
   createdAt       DateTime @default(now())
   revokedAt       DateTime?
   // Optional auto-revoke timestamp. listReceived/listSent filter
@@ -87,9 +127,38 @@ model VaultShare {
 
   owner           User     @relation("SharesSent", fields: [ownerId], references: [id], onDelete: Cascade)
   recipient       User     @relation("SharesReceived", fields: [recipientId], references: [id], onDelete: Cascade)
+  bundle          VaultShareBundle? @relation(fields: [bundleId], references: [id], onDelete: SetNull)
 
   @@index([recipientId, revokedAt, expiresAt, createdAt(sort: Desc)])
   @@index([ownerId, expiresAt, createdAt(sort: Desc)])
+  @@index([bundleId])
+}
+
+/// A snapshot share of a folder: groups N VaultShare rows under one logical
+/// "folder share" for the recipient. Read-only (Phase 1) — children are
+/// individual sealed snapshots and adding/removing items from the source
+/// folder later does NOT auto-update the bundle.
+model VaultShareBundle {
+  id          String   @id @default(cuid())
+  ownerId     String
+  recipientId String
+  // Plaintext label shown in both inboxes — same trust model as share titles.
+  name        String
+  // Optional source folder pointer (owner-side). Null if the original folder
+  // is later deleted; the bundle remains valid because its child shares are
+  // independent encrypted snapshots.
+  sourceFolderId String?
+
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+
+  owner       User      @relation("BundlesSent", fields: [ownerId], references: [id], onDelete: Cascade)
+  recipient   User      @relation("BundlesReceived", fields: [recipientId], references: [id], onDelete: Cascade)
+  shares      VaultShare[]
+
+  @@index([ownerId, createdAt(sort: Desc)])
+  @@index([recipientId, revokedAt, expiresAt, createdAt(sort: Desc)])
 }
 
 model PrivacyPolicy {
@@ -129,14 +198,20 @@ model VaultItem {
   uploadStatus    String?
   multipartUploadId String?
 
+  // Optional folder grouping. SET NULL on folder delete so items survive a
+  // folder removal — folders are pure organization, not ownership.
+  folderId        String?
+
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder          VaultFolder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
   uploadParts     VaultUploadPart[]
 
   @@index([userId, type, updatedAt(sort: Desc)])
   @@index([userId, updatedAt(sort: Desc)])
+  @@index([userId, folderId, updatedAt(sort: Desc)])
 }
 
 model VaultUploadPart {

@@ -12,6 +12,7 @@ import {
   getOne,
   initiateUploadCtl,
   list,
+  rekeyBodyCtl,
   remove,
   storage,
   storageTimeline,
@@ -49,6 +50,15 @@ vaultRouter.post(
 vaultRouter.delete("/uploads/:itemId", abortUploadCtl);
 vaultRouter.get("/items/:id/download", downloadUrl);
 vaultRouter.get("/items/:id/content", downloadContentCtl);
+// Body re-key: overwrite an existing item's encrypted ciphertext (size must
+// match). Used by master-password rotation to migrate legacy items to the
+// per-file-DEK format. Same per-chunk size cap as the upload-content path.
+vaultRouter.post(
+  "/items/:id/rekey-body",
+  uploadRateLimiter(),
+  express.raw({ type: "application/octet-stream", limit: "16mb" }),
+  rekeyBodyCtl,
+);
 
 vaultRouter.get("/items", list);
 vaultRouter.post("/items", create);

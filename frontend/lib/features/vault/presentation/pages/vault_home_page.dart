@@ -8,6 +8,8 @@ import '../../../../shared/widgets/empty_state.dart';
 import '../../../../shared/widgets/inline_message.dart';
 import '../../../../shared/widgets/shimmer_box.dart';
 import '../../../auth/presentation/auth_notifier.dart';
+import '../../../folder/presentation/folder_notifier.dart';
+import '../../../folder/presentation/widgets/folder_filter_bar.dart';
 import '../../../share/data/share_models.dart';
 import '../../../share/presentation/share_notifier.dart';
 import '../../../share/presentation/widgets/shared_item_tile.dart';
@@ -37,6 +39,7 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(vaultProvider.notifier).refresh();
       ref.read(storageProvider.notifier).refresh();
+      ref.read(folderProvider.notifier).refresh();
       // Lazily publish the user's sharing keypair so they can receive shares
       // from this point on. Failure is non-fatal — they just can't share yet.
       ref.read(shareProvider.notifier).ensureKeypair();
@@ -187,6 +190,15 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
                   child: TypeFilter(
                     selected: state.typeFilter,
                     onChanged: notifier.setTypeFilter,
+                  ),
+                ),
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: AppSpacing.sm),
+                ),
+                SliverToBoxAdapter(
+                  child: FolderFilterBar(
+                    selected: state.folderFilter,
+                    onChanged: notifier.setFolderFilter,
                   ),
                 ),
                 const SliverToBoxAdapter(

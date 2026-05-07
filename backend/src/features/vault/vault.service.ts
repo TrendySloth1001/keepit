@@ -36,6 +36,7 @@ export interface VaultItemDto {
   fileSize: string | null;
   fileMime: string | null;
   uploadStatus: string | null;
+  folderId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -49,6 +50,7 @@ function toDto(item: {
   fileSize: bigint | null;
   fileMime: string | null;
   uploadStatus: string | null;
+  folderId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }): VaultItemDto {
@@ -61,6 +63,7 @@ function toDto(item: {
     fileSize: item.fileSize !== null ? item.fileSize.toString() : null,
     fileMime: item.fileMime,
     uploadStatus: item.uploadStatus,
+    folderId: item.folderId,
     createdAt: item.createdAt.toISOString(),
     updatedAt: item.updatedAt.toISOString(),
   };
@@ -100,6 +103,10 @@ export async function listVaultItems(userId: string, input: ListVaultItemsInput)
     where.updatedAt = {};
     if (input.since) where.updatedAt.gte = input.since;
     if (input.until) where.updatedAt.lt = input.until;
+  }
+
+  if (input.folderId !== undefined) {
+    where.folderId = input.folderId === "none" ? null : input.folderId;
   }
 
   const orderBy: Prisma.VaultItemOrderByWithRelationInput[] = (() => {
@@ -251,10 +258,24 @@ export async function updateVaultItem(
   id: string,
   input: UpdateVaultItemInput,
 ): Promise<VaultItemDto> {
-  const data: Prisma.VaultItemUpdateInput = {};
+  const data: Prisma.VaultItemUncheckedUpdateManyInput = {};
   if (input.title !== undefined) data.title = input.title;
   if (input.cipherBlob !== undefined) data.cipherBlob = Buffer.from(input.cipherBlob, "base64");
   if (input.cipherIv !== undefined) data.cipherIv = Buffer.from(input.cipherIv, "base64");
+  // Move to / out of a folder. Validate folder ownership before linking so
+  // the FK can never point at someone else's row.
+  if (input.folderId !== undefined) {
+    if (input.folderId === null) {
+      data.folderId = null;
+    } else {
+      const folder = await prisma.vaultFolder.findFirst({
+        where: { id: input.folderId, userId },
+        select: { id: true },
+      });
+      if (!folder) throw new HttpError(HTTP_STATUS.NOT_FOUND, "Folder not found.");
+      data.folderId = folder.id;
+    }
+  }
   const result = await prisma.vaultItem.updateMany({
     where: { id, userId },
     data,
@@ -451,6 +472,34 @@ export async function getDownloadUrl(userId: string, id: string): Promise<{ url:
   }
   const url = await presignGetUrl(item.fileObjectKey, 300);
   return { url, expiresInSeconds: 300 };
+}
+
+/**
+ * Overwrites the encrypted body of an existing file/image item without
+ * touching its row id or quota accounting. Used by master-password rotation
+ * to migrate legacy items (whose body was encrypted with the master key
+ * directly) onto a per-file DEK, so post-rotation downloads still succeed.
+ *
+ * Constraints:
+ *  - Item must already exist, belong to the user, and be in `uploadStatus:"ready"`.
+ *  - New ciphertext must match the original `fileSize` exactly — we never
+ *    re-issue quota during rekey; if you need to resize, do a delete + reupload.
+ */
+export async function rekeyVaultItemBody(
+  userId: string,
+  itemId: string,
+  ciphertext: Uint8Array,
+): Promise<void> {
+  const item = await prisma.vaultItem.findFirst({
+    where: { id: itemId, userId },
+  });
+  if (!item || !item.fileObjectKey || item.uploadStatus !== "ready" || item.fileSize === null) {
+    throw new HttpError(HTTP_STATUS.NOT_FOUND, MESSAGES.VAULT_ITEM_NOT_FOUND);
+  }
+  if (BigInt(ciphertext.byteLength) !== item.fileSize) {
+    throw new HttpError(HTTP_STATUS.UNPROCESSABLE_ENTITY, MESSAGES.UPLOAD_SIZE_MISMATCH);
+  }
+  await putObjectBytes(item.fileObjectKey, ciphertext, "application/octet-stream");
 }
 
 export async function downloadCiphertextForItem(userId: string, id: string): Promise<Uint8Array> {
