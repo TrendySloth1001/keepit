@@ -14,6 +14,11 @@ class SharedItem {
     required this.permission,
     required this.createdAt,
     this.expiresAt,
+    this.bundleId,
+    this.bundleName,
+    this.firstOpenedAt,
+    this.lastOpenedAt,
+    this.openCount = 0,
   });
 
   final String id;
@@ -30,9 +35,22 @@ class SharedItem {
   // Optional auto-revoke timestamp. null means "no expiry".
   final DateTime? expiresAt;
 
+  // Bundle membership: when [bundleId] is set, this share is part of a
+  // shared-folder snapshot. UI groups rows with the same bundleId under
+  // the bundleName.
+  final String? bundleId;
+  final String? bundleName;
+
+  // Read receipts. firstOpenedAt and openCount are owner-visible signals
+  // from the recipient's decrypts. null/0 → not opened yet.
+  final DateTime? firstOpenedAt;
+  final DateTime? lastOpenedAt;
+  final int openCount;
+
   bool get canEdit => permission == 'edit';
   bool get isExpired =>
       expiresAt != null && DateTime.now().isAfter(expiresAt!);
+  bool get isOpened => firstOpenedAt != null;
 
   factory SharedItem.fromJson(Map<String, dynamic> json) => SharedItem(
         id: json['id'] as String,
@@ -49,7 +67,46 @@ class SharedItem {
         expiresAt: json['expiresAt'] == null
             ? null
             : DateTime.parse(json['expiresAt'] as String),
+        bundleId: json['bundleId'] as String?,
+        bundleName: json['bundleName'] as String?,
+        firstOpenedAt: json['firstOpenedAt'] == null
+            ? null
+            : DateTime.parse(json['firstOpenedAt'] as String),
+        lastOpenedAt: json['lastOpenedAt'] == null
+            ? null
+            : DateTime.parse(json['lastOpenedAt'] as String),
+        openCount: (json['openCount'] as num?)?.toInt() ?? 0,
       );
+}
+
+/// Pre-sealed payload for one item in a folder-share bundle (already
+/// encrypted client-side under a per-share DEK that's wrapped to the
+/// recipient's public key, exactly like a normal POST /shares body).
+class BundleEntry {
+  const BundleEntry({
+    required this.type,
+    required this.title,
+    required this.cipherBlob,
+    required this.cipherIv,
+    required this.wrappedKey,
+    this.sourceItemId,
+  });
+
+  final VaultItemType type;
+  final String title;
+  final String cipherBlob;
+  final String cipherIv;
+  final String wrappedKey;
+  final String? sourceItemId;
+
+  Map<String, dynamic> toJson() => {
+        'type': type.name,
+        'title': title,
+        'cipherBlob': cipherBlob,
+        'cipherIv': cipherIv,
+        'wrappedKey': wrappedKey,
+        if (sourceItemId != null) 'sourceItemId': sourceItemId,
+      };
 }
 
 class RecipientInfo {

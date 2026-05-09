@@ -158,12 +158,19 @@ class ShareNotifier extends StateNotifier<ShareState> {
       cipherBase64: stored.privateCipher!,
       ivBase64: stored.privateIv!,
     );
-    return ShareCrypto.openShare(
+    final payload = ShareCrypto.openShare(
       recipientPrivateKey: Uint8List.fromList(priv),
       cipherBlobBase64: item.cipherBlob,
       cipherIvBase64: item.cipherIv,
       wrappedKeyBase64: item.wrappedKey,
     );
+    // Best-effort read receipt for non-file shares (file shares are auto-bumped
+    // by the server when the recipient hits /:id/content). Failures here must
+    // not turn a successful decrypt into an error for the recipient.
+    if (item.type != VaultItemType.file && item.type != VaultItemType.image) {
+      _repo.markOpened(item.id).catchError((_) {});
+    }
+    return payload;
   }
 
   Future<void> revoke(SharedItem item) async {
@@ -173,6 +180,79 @@ class ShareNotifier extends StateNotifier<ShareState> {
       sent: state.sent.where((s) => s.id != item.id).toList(),
     );
   }
+
+  /// Bundles N pre-decrypted item payloads into a folder-share. Each payload
+  /// is sealed independently with a fresh per-share DEK + recipient-wrap, so
+  /// any single child can be revoked without touching the others.
+  ///
+  /// `items` is the list of entries to seal — each tuple carries its plaintext
+  /// payload (already extracted on the calling side, since only the caller can
+  /// decrypt) plus optional file/image source pointers.
+  Future<List<SharedItem>> shareFolder({
+    required String email,
+    required String folderName,
+    required List<FolderShareEntry> items,
+    String? sourceFolderId,
+    String permission = 'view',
+    int? expiresInDays,
+  }) async {
+    if (items.isEmpty) {
+      throw ArgumentError('Cannot share an empty folder.');
+    }
+    final recipient = await _repo.lookup(email);
+    final entries = <BundleEntry>[];
+    for (final e in items) {
+      final sealed = await ShareCrypto.sealForRecipient(
+        recipientPublicKeyBase64: recipient.publicKey,
+        payload: e.payload,
+      );
+      entries.add(BundleEntry(
+        type: e.type,
+        title: e.title,
+        cipherBlob: sealed.cipherBlob,
+        cipherIv: sealed.cipherIv,
+        wrappedKey: sealed.wrappedKey,
+        sourceItemId: e.sourceItemId,
+      ));
+    }
+    final created = await _repo.createBundle(
+      recipientEmail: recipient.email,
+      name: folderName,
+      items: entries,
+      permission: permission,
+      expiresInDays: expiresInDays,
+      sourceFolderId: sourceFolderId,
+    );
+    state = state.copyWith(sent: [...created, ...state.sent]);
+    return created;
+  }
+
+  Future<void> revokeBundle(String bundleId) async {
+    await _repo.revokeBundle(bundleId);
+    bool sameBundle(SharedItem s) => s.bundleId == bundleId;
+    state = state.copyWith(
+      received: state.received.where((s) => !sameBundle(s)).toList(),
+      sent: state.sent.where((s) => !sameBundle(s)).toList(),
+    );
+  }
+}
+
+/// One entry the caller has already extracted from a vault item, ready to be
+/// sealed by [ShareNotifier.shareFolder]. Sealing happens inside the notifier
+/// so the recipient's public key never needs to leak to UI code.
+class FolderShareEntry {
+  const FolderShareEntry({
+    required this.type,
+    required this.title,
+    required this.payload,
+    this.sourceItemId,
+  });
+  final VaultItemType type;
+  final String title;
+  final Map<String, dynamic> payload;
+  // Required for file/image entries: server uses this to authorize the
+  // recipient's body fetch via /shares/:id/content.
+  final String? sourceItemId;
 }
 
 final shareProvider =

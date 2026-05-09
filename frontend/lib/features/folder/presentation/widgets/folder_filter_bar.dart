@@ -5,6 +5,7 @@ import '../../../../app/theme/app_theme.dart';
 import '../../../../app/theme/tokens.dart';
 import '../../../../shared/network/api_error.dart';
 import '../../../../shared/widgets/app_snack.dart';
+import '../../../share/presentation/widgets/share_folder_sheet.dart';
 import '../folder_notifier.dart';
 
 /// Horizontal chip strip of folders. Tap to filter the vault list, long-press
@@ -76,6 +77,19 @@ class FolderFilterBar extends ConsumerWidget {
       builder: (ctx) => SafeArea(
         child: Wrap(children: [
           ListTile(
+            leading: const Icon(Icons.folder_shared_outlined,
+                color: AppTheme.primary),
+            title: const Text(
+              'Share folder',
+              style: TextStyle(color: AppTheme.fg),
+            ),
+            subtitle: const Text(
+              'Send a sealed snapshot to another KeepIt user.',
+              style: TextStyle(color: AppTheme.muted, fontSize: 12),
+            ),
+            onTap: () => Navigator.pop(ctx, 'share'),
+          ),
+          ListTile(
             leading: const Icon(Icons.edit_outlined, color: AppTheme.fg),
             title: const Text(
               'Rename folder',
@@ -100,6 +114,14 @@ class FolderFilterBar extends ConsumerWidget {
       ),
     );
     if (action == null || !context.mounted) return;
+    if (action == 'share') {
+      final folder = ref
+          .read(folderProvider)
+          .folders
+          .firstWhere((f) => f.id == folderId);
+      await showShareFolderSheet(context, folder: folder);
+      return;
+    }
     if (action == 'rename') {
       final controller = TextEditingController(text: currentName);
       final name = await showDialog<String>(

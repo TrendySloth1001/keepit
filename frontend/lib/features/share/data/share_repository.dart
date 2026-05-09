@@ -104,4 +104,40 @@ class ShareRepository {
 
   Future<void> revoke(String id) =>
       _dio.delete(ApiConstants.share(id));
+
+  /// Marks a non-file share as opened by the recipient. File shares are
+  /// auto-marked server-side when their content endpoint is hit.
+  Future<void> markOpened(String id) =>
+      _dio.post(ApiConstants.shareOpened(id));
+
+  /// Posts a folder-share bundle: one transaction creates a bundle row and
+  /// N pre-sealed VaultShare children. Returns the freshly-listed children.
+  Future<List<SharedItem>> createBundle({
+    required String recipientEmail,
+    required String name,
+    required List<BundleEntry> items,
+    String permission = 'view',
+    int? expiresInDays,
+    String? sourceFolderId,
+  }) async {
+    final res = await _dio.post(
+      ApiConstants.shareBundles,
+      data: {
+        'recipientEmail': recipientEmail,
+        'name': name,
+        'permission': permission,
+        if (expiresInDays != null) 'expiresInDays': expiresInDays,
+        if (sourceFolderId != null) 'sourceFolderId': sourceFolderId,
+        'items': items.map((e) => e.toJson()).toList(),
+      },
+    );
+    final data = Map<String, dynamic>.from(res.data['data'] as Map);
+    final shares = (data['shares'] as List).cast<Map>();
+    return shares
+        .map((m) => SharedItem.fromJson(Map<String, dynamic>.from(m)))
+        .toList();
+  }
+
+  Future<void> revokeBundle(String id) =>
+      _dio.delete(ApiConstants.shareBundle(id));
 }

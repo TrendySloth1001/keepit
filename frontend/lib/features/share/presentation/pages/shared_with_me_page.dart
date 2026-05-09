@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme/app_theme.dart';
 import '../../../../app/theme/tokens.dart';
+import '../../../../shared/network/api_error.dart';
 import '../../../../shared/utils/format.dart';
 import '../../../../shared/widgets/app_snack.dart';
 import '../../../../shared/widgets/empty_state.dart';
@@ -121,6 +122,58 @@ class _SharedWithMePageState extends ConsumerState<SharedWithMePage>
   }
 }
 
+/// One row in the shared list. A row is either a single standalone share
+/// (`single != null`) or a bundle of N shares grouped under one folder name
+/// (`bundle != null`).
+sealed class _ShareRow {
+  const _ShareRow();
+  DateTime get sortKey;
+}
+
+class _SingleRow extends _ShareRow {
+  const _SingleRow(this.item);
+  final SharedItem item;
+  @override
+  DateTime get sortKey => item.createdAt;
+}
+
+class _BundleRow extends _ShareRow {
+  const _BundleRow({
+    required this.bundleId,
+    required this.bundleName,
+    required this.children,
+  });
+  final String bundleId;
+  final String bundleName;
+  final List<SharedItem> children;
+  @override
+  DateTime get sortKey => children.first.createdAt;
+}
+
+/// Groups bundle-tagged shares into single _BundleRow entries, keeps the rest
+/// as _SingleRow, and sorts the result by createdAt desc.
+List<_ShareRow> _groupBundles(List<SharedItem> items) {
+  final bundles = <String, List<SharedItem>>{};
+  final singles = <SharedItem>[];
+  for (final s in items) {
+    if (s.bundleId != null) {
+      bundles.putIfAbsent(s.bundleId!, () => []).add(s);
+    } else {
+      singles.add(s);
+    }
+  }
+  final rows = <_ShareRow>[
+    ...singles.map(_SingleRow.new),
+    ...bundles.entries.map((e) => _BundleRow(
+          bundleId: e.key,
+          bundleName: e.value.first.bundleName ?? 'Folder',
+          children: e.value,
+        )),
+  ];
+  rows.sort((a, b) => b.sortKey.compareTo(a.sortKey));
+  return rows;
+}
+
 class _ShareList extends ConsumerWidget {
   const _ShareList({
     required this.items,
@@ -144,6 +197,7 @@ class _ShareList extends ConsumerWidget {
             : 'Open any password, key, file or image and tap the share icon.',
       );
     }
+    final rows = _groupBundles(items);
     return RefreshIndicator(
       color: AppTheme.primary,
       onRefresh: () => ref.read(shareProvider.notifier).refresh(),
@@ -154,10 +208,197 @@ class _ShareList extends ConsumerWidget {
           AppSpacing.lg,
           AppSpacing.huge,
         ),
-        itemCount: items.length,
+        itemCount: rows.length,
         separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
-        itemBuilder: (_, i) =>
-            _ShareCard(item: items[i], incoming: incoming),
+        itemBuilder: (_, i) {
+          final row = rows[i];
+          if (row is _SingleRow) {
+            return _ShareCard(item: row.item, incoming: incoming);
+          }
+          if (row is _BundleRow) {
+            return _BundleCard(
+              bundleId: row.bundleId,
+              bundleName: row.bundleName,
+              children: row.children,
+              incoming: incoming,
+            );
+          }
+          return const SizedBox.shrink();
+        },
+      ),
+    );
+  }
+}
+
+class _BundleCard extends ConsumerStatefulWidget {
+  const _BundleCard({
+    required this.bundleId,
+    required this.bundleName,
+    required this.children,
+    required this.incoming,
+  });
+  final String bundleId;
+  final String bundleName;
+  final List<SharedItem> children;
+  final bool incoming;
+
+  @override
+  ConsumerState<_BundleCard> createState() => _BundleCardState();
+}
+
+class _BundleCardState extends ConsumerState<_BundleCard> {
+  bool _expanded = false;
+
+  Future<void> _revoke() async {
+    try {
+      await ref.read(shareProvider.notifier).revokeBundle(widget.bundleId);
+      if (mounted) {
+        showAppSnack(context, 'Removed', kind: AppSnackKind.success);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      showAppSnack(context, friendlyApiError(e), kind: AppSnackKind.error);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final children = widget.children;
+    final firstCreated = children
+        .map((c) => c.createdAt)
+        .reduce((a, b) => a.isBefore(b) ? a : b);
+    final partyLabel = widget.incoming
+        ? 'From ${children.first.ownerName.isEmpty ? children.first.ownerEmail : children.first.ownerName}'
+        : 'To ${children.first.recipientEmail}';
+    final openedCount = children.where((c) => c.isOpened).length;
+    return Material(
+      color: AppTheme.surface,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      child: Ink(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppTheme.hairline),
+        ),
+        child: Column(
+          children: [
+            InkWell(
+              onTap: () => setState(() => _expanded = !_expanded),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                      ),
+                      child: const Icon(
+                        Icons.folder_shared_outlined,
+                        color: AppTheme.primary,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.bundleName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppTheme.fg,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            partyLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppTheme.muted,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              _Chip(
+                                icon: Icons.folder_outlined,
+                                label: 'Folder · ${children.length} item'
+                                    '${children.length == 1 ? '' : 's'}',
+                              ),
+                              _Chip(
+                                label:
+                                    'Shared ${formatRelativeTime(firstCreated)}',
+                              ),
+                              if (!widget.incoming)
+                                _Chip(
+                                  icon: openedCount == 0
+                                      ? Icons.mark_email_unread_outlined
+                                      : Icons.mark_email_read_outlined,
+                                  label: openedCount == 0
+                                      ? 'Not opened yet'
+                                      : '$openedCount/${children.length} opened',
+                                  tone: openedCount == 0
+                                      ? _ChipTone.warning
+                                      : _ChipTone.neutral,
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuButton<String>(
+                      icon:
+                          const Icon(Icons.more_vert, color: AppTheme.muted),
+                      onSelected: (v) {
+                        if (v == 'revoke') _revoke();
+                      },
+                      itemBuilder: (_) => [
+                        PopupMenuItem(
+                          value: 'revoke',
+                          child:
+                              Text(widget.incoming ? 'Remove' : 'Revoke all'),
+                        ),
+                      ],
+                    ),
+                    Icon(
+                      _expanded
+                          ? Icons.expand_less
+                          : Icons.expand_more,
+                      color: AppTheme.muted,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (_expanded) ...[
+              const Divider(color: AppTheme.hairline, height: 1),
+              for (final child in children)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.md,
+                    AppSpacing.xs,
+                    AppSpacing.md,
+                    AppSpacing.xs,
+                  ),
+                  child: _ShareCard(
+                    item: child,
+                    incoming: widget.incoming,
+                  ),
+                ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -264,6 +505,19 @@ class _ShareCardState extends ConsumerState<_ShareCard> {
                                 : 'Revokes in ${formatCountdown(i.expiresAt!)}',
                             tone: i.isExpired
                                 ? _ChipTone.danger
+                                : _ChipTone.warning,
+                          ),
+                        if (!widget.incoming)
+                          _Chip(
+                            icon: i.isOpened
+                                ? Icons.mark_email_read_outlined
+                                : Icons.mark_email_unread_outlined,
+                            label: i.isOpened
+                                ? 'Opened ${formatRelativeTime(i.lastOpenedAt ?? i.firstOpenedAt!)}'
+                                    '${i.openCount > 1 ? ' · ${i.openCount}×' : ''}'
+                                : 'Not opened yet',
+                            tone: i.isOpened
+                                ? _ChipTone.neutral
                                 : _ChipTone.warning,
                           ),
                       ],
