@@ -49,6 +49,7 @@ dependencies:
   share_plus: ^10.1.4
   url_launcher: ^6.3.2
   open_filex: ^4.5.0
+  dynamic_color: ^1.7.0
 
 dev_dependencies:
   flutter_test:

@@ -8,6 +8,9 @@ import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/master_setup_page.dart';
 import '../../features/auth/presentation/pages/master_unlock_page.dart';
 import '../../features/auth/presentation/pages/privacy_policy_consent_page.dart';
+import '../../features/collab_folder/presentation/pages/collab_folder_detail_page.dart';
+import '../../features/folder/data/folder_models.dart';
+import '../../features/folder/presentation/pages/folder_detail_page.dart';
 import '../../features/settings/account_page.dart';
 import '../../features/settings/change_master_password_page.dart';
 import '../../features/settings/export_data_page.dart';
@@ -147,6 +150,16 @@ GoRouter buildAppRouter(Ref ref) {
             VaultIconPickerPage(initial: state.extra as String?),
       ),
       GoRoute(path: '/vault/upgrade', builder: (_, _) => const UpgradePage()),
+      GoRoute(
+        path: '/vault/folder',
+        builder: (_, state) =>
+            FolderDetailPage(folder: state.extra! as VaultFolder),
+      ),
+      GoRoute(
+        path: '/vault/collab/:id',
+        builder: (_, state) =>
+            CollabFolderDetailPage(folderId: state.pathParameters['id']!),
+      ),
     ],
   );
 }

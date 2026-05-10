@@ -34,22 +34,26 @@ class _StorageMeterState extends ConsumerState<StorageMeter> {
         ? AppTheme.warning
         : AppTheme.primary;
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        GestureDetector(
-          onTap: () => setState(() => _isExpanded = !_isExpanded),
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppTheme.surface,
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-              border: Border.all(color: AppTheme.hairline),
-            ),
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+    return Padding(
+      // Breathing room above so the floating upgrade pill doesn't get
+      // clipped by the parent sliver/padding above the meter.
+      padding: const EdgeInsets.only(top: 12),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          GestureDetector(
+            onTap: () => setState(() => _isExpanded = !_isExpanded),
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppTheme.surface,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(color: AppTheme.hairline),
+              ),
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Expanded(
@@ -213,54 +217,17 @@ class _StorageMeterState extends ConsumerState<StorageMeter> {
                   ],
                 ],
               ],
-            ),
-          ),
-        ),
-        if (widget.onUpgrade != null && !_isExpanded)
-          Positioned(
-            top: -12,
-            right: -8,
-            child: Material(
-              color: AppTheme.primarySoft,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              child: InkWell(
-                onTap: widget.onUpgrade,
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
-                    border: Border.all(
-                      color: AppTheme.primary.withValues(alpha: 0.2),
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.workspace_premium,
-                        size: 14,
-                        color: AppTheme.primaryDark,
-                      ),
-                      SizedBox(width: 4),
-                      Text(
-                        'Upgrade to 2GB',
-                        style: TextStyle(
-                          color: AppTheme.primaryDark,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ),
             ),
           ),
-      ],
+          if (widget.onUpgrade != null && !_isExpanded)
+            Positioned(
+              top: -12,
+              right: 12,
+              child: _UpgradePill(onTap: widget.onUpgrade!),
+            ),
+        ],
+      ),
     );
   }
 
@@ -279,6 +246,53 @@ class _StorageMeterState extends ConsumerState<StorageMeter> {
     VaultItemType.file => 'Documents',
     VaultItemType.image => 'Images',
   };
+}
+
+/// Compact upgrade chip rendered inline in the storage meter when the user
+/// is on the free plan. Tapping routes to the upgrade page.
+class _UpgradePill extends StatelessWidget {
+  const _UpgradePill({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppTheme.primarySoft,
+      borderRadius: BorderRadius.circular(AppRadius.pill),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            border: Border.all(
+              color: AppTheme.primary.withValues(alpha: 0.2),
+            ),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.workspace_premium,
+                size: 14,
+                color: AppTheme.primaryDark,
+              ),
+              SizedBox(width: 4),
+              Text(
+                'Upgrade to 2GB',
+                style: TextStyle(
+                  color: AppTheme.primaryDark,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Promo card mirroring the Glassdoor-style "Upgrade to Premium" tile.

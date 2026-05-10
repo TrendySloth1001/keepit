@@ -8,9 +8,13 @@ import '../../../../shared/widgets/empty_state.dart';
 import '../../../../shared/widgets/inline_message.dart';
 import '../../../../shared/widgets/shimmer_box.dart';
 import '../../../auth/presentation/auth_notifier.dart';
+import '../../../collab_folder/presentation/collab_folder_notifier.dart';
+import '../../../folder/data/folder_models.dart';
 import '../../../folder/presentation/folder_notifier.dart';
-import '../../../folder/presentation/widgets/folder_filter_bar.dart';
+import '../../../folder/presentation/widgets/folder_grid.dart';
+import '../../../folder/presentation/widgets/folder_edit_sheet.dart';
 import '../../../share/data/share_models.dart';
+import '../../../share/presentation/widgets/share_folder_sheet.dart';
 import '../../../share/presentation/share_notifier.dart';
 import '../../../share/presentation/widgets/shared_item_tile.dart';
 import '../../data/vault_models.dart';
@@ -37,9 +41,14 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Home shows ALL items (loose + foldered) so users never lose sight of
+      // a credential just because it's been categorized. Folders sit on top
+      // as a navigational shortcut.
+      ref.read(vaultProvider.notifier).setFolderFilter(null);
       ref.read(vaultProvider.notifier).refresh();
       ref.read(storageProvider.notifier).refresh();
       ref.read(folderProvider.notifier).refresh();
+      ref.read(collabFolderListProvider.notifier).refresh();
       // Lazily publish the user's sharing keypair so they can receive shares
       // from this point on. Failure is non-fatal — they just can't share yet.
       ref.read(shareProvider.notifier).ensureKeypair();
@@ -98,6 +107,35 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
     }
   }
 
+  void _openFolder(VaultFolder folder) {
+    context.push('/vault/folder', extra: folder);
+  }
+
+  Future<void> _shareFolder(VaultFolder folder) {
+    return showShareFolderSheet(context, folder: folder);
+  }
+
+  Future<void> _createCollabFolder() async {
+    final result = await showFolderEditSheet(
+      context,
+      title: 'New shared folder',
+      confirm: 'Create',
+    );
+    if (result == null || !mounted) return;
+    try {
+      final created = await ref
+          .read(collabFolderListProvider.notifier)
+          .create(name: result.name, iconKey: result.iconKey);
+      if (!mounted) return;
+      context.push('/vault/collab/${created.id}');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not create folder: $e')),
+      );
+    }
+  }
+
   void _openShared(SharedItem item) {
     context.push(
       '/vault/shared/view',
@@ -110,7 +148,10 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
     VaultItemType? typeFilter,
     String search,
   ) {
-    var filtered = items;
+    // Bundled shares (folder-shares) are surfaced as tiles in the FolderGrid,
+    // not in the items list — exclude them here so a folder-share doesn't
+    // appear twice.
+    var filtered = items.where((i) => i.bundleId == null).toList();
     if (typeFilter != null) {
       filtered = filtered.where((i) => i.type == typeFilter).toList();
     }
@@ -187,18 +228,19 @@ class _VaultHomePageState extends ConsumerState<VaultHomePage> {
                   ),
                 ),
                 SliverToBoxAdapter(
+                  child: FolderGrid(
+                    onOpen: _openFolder,
+                    onShare: _shareFolder,
+                    onOpenSharedBundle: (_) => context.push('/vault/shared'),
+                    onOpenCollab: (cf) =>
+                        context.push('/vault/collab/${cf.id}'),
+                    onCreateCollab: _createCollabFolder,
+                  ),
+                ),
+                SliverToBoxAdapter(
                   child: TypeFilter(
                     selected: state.typeFilter,
                     onChanged: notifier.setTypeFilter,
-                  ),
-                ),
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: AppSpacing.sm),
-                ),
-                SliverToBoxAdapter(
-                  child: FolderFilterBar(
-                    selected: state.folderFilter,
-                    onChanged: notifier.setFolderFilter,
                   ),
                 ),
                 const SliverToBoxAdapter(
@@ -317,10 +359,11 @@ class _Hero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
-      decoration: const BoxDecoration(
-        color: AppTheme.heroGreen,
-        borderRadius: BorderRadius.only(
+      decoration: BoxDecoration(
+        color: cs.primaryContainer,
+        borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(28),
           bottomRight: Radius.circular(28),
         ),
@@ -340,15 +383,8 @@ class _Hero extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: cs.surface,
                   borderRadius: BorderRadius.circular(10),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
                 ),
                 alignment: Alignment.center,
                 child: Image.asset(
@@ -358,77 +394,44 @@ class _Hero extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              const Text(
+              Text(
                 'KeepIt',
                 style: TextStyle(
-                  color: AppTheme.fg,
+                  color: cs.onPrimaryContainer,
                   fontWeight: FontWeight.w800,
                   fontSize: 18,
                   letterSpacing: -0.3,
                 ),
               ),
               const Spacer(),
-              InkWell(
-                onTap: onLock,
-                borderRadius: BorderRadius.circular(40),
-                child: Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.lock_outline,
-                    color: AppTheme.fg,
-                    size: 20,
-                  ),
-                ),
+              IconButton.filledTonal(
+                tooltip: 'Lock',
+                onPressed: onLock,
+                icon: const Icon(Icons.lock_outline),
               ),
-              const SizedBox(width: AppSpacing.sm),
-              GestureDetector(
+              const SizedBox(width: AppSpacing.xs),
+              InkWell(
                 onTap: onSettings,
-                child: Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  padding: const EdgeInsets.all(2),
-                  child: CircleAvatar(
-                    backgroundColor: AppTheme.primary,
-                    backgroundImage:
-                        (avatarUrl != null && avatarUrl!.isNotEmpty)
-                        ? NetworkImage(avatarUrl!)
-                        : null,
-                    child: (avatarUrl == null || avatarUrl!.isEmpty)
-                        ? Text(
-                            firstName.isEmpty
-                                ? '?'
-                                : firstName[0].toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 14,
-                            ),
-                          )
-                        : null,
-                  ),
+                borderRadius: BorderRadius.circular(40),
+                child: CircleAvatar(
+                  radius: 20,
+                  backgroundColor: cs.primary,
+                  backgroundImage:
+                      (avatarUrl != null && avatarUrl!.isNotEmpty)
+                          ? NetworkImage(avatarUrl!)
+                          : null,
+                  child: (avatarUrl == null || avatarUrl!.isEmpty)
+                      ? Text(
+                          firstName.isEmpty
+                              ? '?'
+                              : firstName[0].toUpperCase(),
+                          style: TextStyle(
+                            color: cs.onPrimary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                          ),
+                        )
+                      : null,
                 ),
               ),
             ],
@@ -436,66 +439,33 @@ class _Hero extends StatelessWidget {
           const SizedBox(height: AppSpacing.lg),
           Text(
             '$greeting${firstName.isEmpty ? '' : ', $firstName'}!',
-            style: const TextStyle(
-              color: AppTheme.fg,
-              fontSize: 24,
+            style: TextStyle(
+              color: cs.onPrimaryContainer,
+              fontSize: 26,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.4,
             ),
           ),
           const SizedBox(height: 4),
-          const Text(
+          Text(
             'Your secrets are encrypted end-to-end on this device.',
-            style: TextStyle(color: AppTheme.muted, fontSize: 13),
+            style: TextStyle(
+              color: cs.onPrimaryContainer.withValues(alpha: 0.75),
+              fontSize: 13,
+            ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: TextField(
-              controller: searchController,
-              onChanged: onSearch,
-              decoration: InputDecoration(
-                hintText: 'Search your vault…',
-                prefixIcon: const Padding(
-                  padding: EdgeInsets.only(left: 14, right: 8),
-                  child: Icon(Icons.search, color: AppTheme.muted),
-                ),
-                prefixIconConstraints: const BoxConstraints(
-                  minWidth: 0,
-                  minHeight: 0,
-                ),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: 14,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  borderSide: const BorderSide(
-                    color: AppTheme.primary,
-                    width: 1.4,
-                  ),
-                ),
-              ),
+          // Native Material 3 SearchBar — gives Android-native styling, ripple,
+          // shadow, and accessibility hooks for free.
+          SearchBar(
+            controller: searchController,
+            onChanged: onSearch,
+            hintText: 'Search your vault…',
+            elevation: const WidgetStatePropertyAll(0),
+            backgroundColor: WidgetStatePropertyAll(cs.surface),
+            leading: Icon(Icons.search, color: cs.onSurfaceVariant),
+            padding: const WidgetStatePropertyAll(
+              EdgeInsets.symmetric(horizontal: AppSpacing.md),
             ),
           ),
         ],

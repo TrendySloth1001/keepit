@@ -49,6 +49,11 @@ model User {
   sharesReceived  VaultShare[] @relation("SharesReceived")
   shareBundlesSent     VaultShareBundle[] @relation("BundlesSent")
   shareBundlesReceived VaultShareBundle[] @relation("BundlesReceived")
+  collabFoldersOwned   CollabFolder[] @relation("CollabFolderOwner")
+  collabMemberships    CollabMember[]
+  collabItemsCreated   CollabItem[]
+  collabItemKeys       CollabItemKey[]
+  collabActivities     CollabActivity[]
 
   @@index([email])
 }
@@ -226,4 +231,112 @@ model VaultUploadPart {
 
   @@unique([itemId, partNumber])
   @@index([itemId])
+}
+
+/// Collaborative shared folder. Distinct from VaultShareBundle (which is a
+/// frozen snapshot): members can post new items and see each other's posts
+/// in real time. Each item is encrypted under a per-item DEK that is wrapped
+/// to every current member's sharing public key (one CollabItemKey row per
+/// member per item).
+///
+/// Edit policy: only the item creator may edit/delete their own items.
+/// Member removal in v1 simply revokes future-key access — past items remain
+/// readable by any device that already cached them. Key rotation can be
+/// added later if compliance needs it.
+model CollabFolder {
+  id          String   @id @default(cuid())
+  ownerId     String
+  name        String
+  iconKey     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner       User             @relation("CollabFolderOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members     CollabMember[]
+  items       CollabItem[]
+  activities  CollabActivity[]
+
+  @@index([ownerId, createdAt(sort: Desc)])
+}
+
+/// Membership row. Owner is automatically inserted as the first member at
+/// folder creation. Role gates capability: 'owner' may invite/remove members
+/// and delete the folder; 'member' may post items and read all items.
+model CollabMember {
+  id          String   @id @default(cuid())
+  folderId    String
+  userId      String
+  role        String   @default("member") // "owner" | "member"
+  joinedAt    DateTime @default(now())
+
+  folder      CollabFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemKeys    CollabItemKey[]
+
+  @@unique([folderId, userId])
+  @@index([userId])
+  @@index([folderId])
+}
+
+/// One credential inside a collaborative folder. cipherBlob/cipherIv hold
+/// the AES-GCM ciphertext under the per-item DEK. The DEK itself never
+/// touches the server in plaintext — recipients unwrap their own copy from
+/// CollabItemKey.
+model CollabItem {
+  id          String   @id @default(cuid())
+  folderId    String
+  creatorId   String
+  type        VaultItemType
+  // Plaintext title — same trust model as VaultItem.title.
+  title       String
+  cipherBlob  Bytes
+  cipherIv    Bytes
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  folder      CollabFolder    @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  creator     User            @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  keys        CollabItemKey[]
+
+  @@index([folderId, createdAt(sort: Desc)])
+  @@index([creatorId])
+}
+
+/// Per-member sealed copy of a CollabItem's DEK. The poster wraps the DEK
+/// to every current member's sharing public key when the item is created;
+/// each member unwraps their own row to decrypt the cipher blob.
+model CollabItemKey {
+  id          String   @id @default(cuid())
+  itemId      String
+  memberId    String   // CollabMember.id
+  userId      String   // denormalized for direct lookup by user
+  wrappedKey  Bytes
+
+  item        CollabItem   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  member      CollabMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, userId])
+  @@index([userId])
+  @@index([itemId])
+}
+
+/// Append-only audit log of folder activity, visible to all members.
+/// action ∈ {"created", "invited", "joined", "left", "post_item",
+///           "edit_item", "delete_item", "viewed_item"}.
+model CollabActivity {
+  id          String   @id @default(cuid())
+  folderId    String
+  actorId     String
+  action      String
+  targetItemId String?
+  // Optional human-readable detail (e.g. invited user's email, item title
+  // at time of action). No sensitive data — never the cipher.
+  detail      String?
+  createdAt   DateTime @default(now())
+
+  folder      CollabFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  actor       User         @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([folderId, createdAt(sort: Desc)])
 }

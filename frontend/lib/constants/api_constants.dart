@@ -44,6 +44,20 @@ class ApiConstants {
   static const String folders = '/api/v1/folders';
   static String folder(String id) => '$folders/$id';
 
+  // Collaborative shared folders
+  static const String collabFolders = '/api/v1/collab-folders';
+  static String collabFolder(String id) => '$collabFolders/$id';
+  static const String collabFolderRecipientLookup =
+      '/api/v1/collab-folders/_lookup/recipient';
+  static String collabFolderMembers(String id) => '$collabFolders/$id/members';
+  static String collabFolderMember(String id, String userId) =>
+      '$collabFolders/$id/members/$userId';
+  static String collabFolderItems(String id) => '$collabFolders/$id/items';
+  static String collabFolderItem(String id, String itemId) =>
+      '$collabFolders/$id/items/$itemId';
+  static String collabFolderItemViewed(String id, String itemId) =>
+      '$collabFolders/$id/items/$itemId/viewed';
+
   /// Web/server-side Google OAuth client ID. google_sign_in needs this as
   /// `serverClientId` so it returns an idToken our backend can verify.
   static const String googleServerClientId =

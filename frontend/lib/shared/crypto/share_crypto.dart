@@ -195,3 +195,157 @@ class SealedShare {
   final String cipherIv;
   final String wrappedKey;
 }
+
+class SealedFanout {
+  const SealedFanout({
+    required this.cipherBlob,
+    required this.cipherIv,
+    required this.wrappedKeys,
+  });
+  final String cipherBlob;
+  final String cipherIv;
+  // Map of userId → base64 wrappedKey.
+  final Map<String, String> wrappedKeys;
+}
+
+/// Multi-recipient sealing helpers used by collaborative shared folders.
+/// The payload is encrypted once with a fresh DEK; the DEK is then wrapped
+/// independently to each recipient's sharing public key (same wrap protocol
+/// as [ShareCrypto.sealForRecipient]).
+class CollabCrypto {
+  CollabCrypto._();
+
+  static final _x25519 = Cryptography.instance.x25519();
+  static final _aes = AesGcm.with256bits();
+  static final _hkdf = Hkdf(hmac: Hmac.sha256(), outputLength: 32);
+
+  /// Encrypts [payload] under a fresh DEK and wraps that DEK to every
+  /// recipient in [recipients]. Caller MUST include themselves.
+  static Future<SealedFanout> sealForMembers({
+    required Map<String, dynamic> payload,
+    required Map<String, String> recipients, // userId -> publicKey base64
+  }) async {
+    final dek = VaultCrypto.randomBytes(32);
+    final iv = VaultCrypto.randomBytes(12);
+    final plain = utf8.encode(jsonEncode(payload));
+    final secretBox = await _aes.encrypt(
+      plain,
+      secretKey: SecretKey(dek),
+      nonce: iv,
+    );
+    final cipher = Uint8List(secretBox.cipherText.length + 16)
+      ..setRange(0, secretBox.cipherText.length, secretBox.cipherText)
+      ..setRange(
+        secretBox.cipherText.length,
+        secretBox.cipherText.length + 16,
+        secretBox.mac.bytes,
+      );
+
+    final wrapped = <String, String>{};
+    for (final entry in recipients.entries) {
+      wrapped[entry.key] = await _wrapDek(dek, entry.value);
+    }
+    return SealedFanout(
+      cipherBlob: base64Encode(cipher),
+      cipherIv: base64Encode(iv),
+      wrappedKeys: wrapped,
+    );
+  }
+
+  /// Re-wraps an already-known DEK to a single new recipient (used by
+  /// [reWrapForNewMember] when inviting someone — we open each existing
+  /// item with our own key, recover the DEK, and seal it for the invitee).
+  static Future<String> wrapDekFor({
+    required Uint8List dek,
+    required String recipientPublicKeyBase64,
+  }) {
+    return _wrapDek(dek, recipientPublicKeyBase64);
+  }
+
+  static Future<String> _wrapDek(
+    Uint8List dek,
+    String recipientPublicKeyBase64,
+  ) async {
+    final ephem = await _x25519.newKeyPair();
+    final ephemPub = await ephem.extractPublicKey();
+    final shared = await _x25519.sharedSecretKey(
+      keyPair: ephem,
+      remotePublicKey: SimplePublicKey(
+        base64Decode(recipientPublicKeyBase64),
+        type: KeyPairType.x25519,
+      ),
+    );
+    final wrappingKey = await _hkdf.deriveKey(
+      secretKey: shared,
+      nonce: utf8.encode('keepit:share-wrap:v1'),
+    );
+    final wrapIv = VaultCrypto.randomBytes(12);
+    final wrapBox = await _aes.encrypt(
+      dek,
+      secretKey: wrappingKey,
+      nonce: wrapIv,
+    );
+    final ephemBytes = Uint8List.fromList(ephemPub.bytes);
+    final out = Uint8List(32 + 12 + wrapBox.cipherText.length + 16);
+    var off = 0;
+    out.setRange(off, off + 32, ephemBytes);
+    off += 32;
+    out.setRange(off, off + 12, wrapIv);
+    off += 12;
+    out.setRange(off, off + wrapBox.cipherText.length, wrapBox.cipherText);
+    off += wrapBox.cipherText.length;
+    out.setRange(off, off + 16, wrapBox.mac.bytes);
+    return base64Encode(out);
+  }
+
+  /// Recovers the DEK for an item by unwrapping the caller's own
+  /// `wrappedKey` row. Used when re-wrapping older items for a newly
+  /// invited member.
+  static Future<Uint8List> recoverDek({
+    required Uint8List myPrivateKey,
+    required String wrappedKeyBase64,
+  }) async {
+    final wrapped = base64Decode(wrappedKeyBase64);
+    if (wrapped.length < 32 + 12 + 16) {
+      throw const FormatException('wrappedKey too short');
+    }
+    final ephemPub = wrapped.sublist(0, 32);
+    final wrapIv = wrapped.sublist(32, 44);
+    final wrapMac = wrapped.sublist(wrapped.length - 16);
+    final wrapCipher = wrapped.sublist(44, wrapped.length - 16);
+    final shared = await _x25519.sharedSecretKey(
+      keyPair: SimpleKeyPairData(
+        myPrivateKey,
+        publicKey: SimplePublicKey(ephemPub, type: KeyPairType.x25519),
+        type: KeyPairType.x25519,
+      ),
+      remotePublicKey: SimplePublicKey(ephemPub, type: KeyPairType.x25519),
+    );
+    final wrappingKey = await _hkdf.deriveKey(
+      secretKey: shared,
+      nonce: utf8.encode('keepit:share-wrap:v1'),
+    );
+    final dek = await _aes.decrypt(
+      SecretBox(wrapCipher, nonce: wrapIv, mac: Mac(wrapMac)),
+      secretKey: wrappingKey,
+    );
+    return Uint8List.fromList(dek);
+  }
+
+  /// Decrypts the cipher payload given the recovered DEK.
+  static Future<Map<String, dynamic>> openWithDek({
+    required Uint8List dek,
+    required String cipherBlobBase64,
+    required String cipherIvBase64,
+  }) async {
+    final cipher = base64Decode(cipherBlobBase64);
+    final iv = base64Decode(cipherIvBase64);
+    final mac = cipher.sublist(cipher.length - 16);
+    final body = cipher.sublist(0, cipher.length - 16);
+    final plain = await _aes.decrypt(
+      SecretBox(body, nonce: iv, mac: Mac(mac)),
+      secretKey: SecretKey(dek),
+    );
+    return jsonDecode(utf8.decode(plain)) as Map<String, dynamic>;
+  }
+}
